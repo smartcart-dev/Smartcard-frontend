@@ -1,0 +1,13 @@
+@use '../../styles' as *;
+
+// Demo client theme overrides
+:root {
+  --primary-color: #1e88e5;
+  --accent-color: #ffb300;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: #f5f7ff;
+}
+

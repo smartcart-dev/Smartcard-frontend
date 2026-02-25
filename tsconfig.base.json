@@ -1,0 +1,28 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2020", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@smartcart-platform/feature-cart": ["cart/src/index.ts"],
+      "@smartcart-platform/feature-store-map": ["store/src/index.ts"],
+      "@smartcart-platform/ui": ["shared/src/index.ts"],
+      "@smartcart-platform/data-access-cart": ["cart/data-access/src/index.ts"],
+      "@smartcart-platform/data-access-store-map": [
+        "store/data-access/src/index.ts"
+      ]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}
