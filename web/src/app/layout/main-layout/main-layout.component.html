@@ -1,0 +1,54 @@
+<div class="app-layout">
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">D</div>
+      <span class="brand-text">Dashboard</span>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>
+        <li>
+          <a routerLink="/app/dashboard" routerLinkActive="active" class="nav-item">
+            <span class="icon">📊</span>
+            Home
+          </a>
+        </li>
+        <li>
+          <a routerLink="/app/products" routerLinkActive="active" class="nav-item">
+            <span class="icon">📦</span>
+            Products
+          </a>
+        </li>
+        <li>
+          <a routerLink="/app/settings" routerLinkActive="active" class="nav-item">
+            <span class="icon">⚙️</span>
+            Settings
+          </a>
+        </li>
+      </ul>
+    </nav>
+    <div class="sidebar-footer">
+      <a routerLink="/login" class="nav-item logout">
+        <span class="icon">🚪</span>
+        Logout
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+    <header class="top-header">
+      <div class="search-bar">
+        <input type="text" placeholder="Search..." />
+      </div>
+      <div class="user-profile">
+        <span class="user-name">Admin User</span>
+        <div class="avatar">A</div>
+      </div>
+    </header>
+
+    <div class="content-router-area">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+</div>

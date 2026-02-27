@@ -1,0 +1,55 @@
+<div class="login-container">
+  <div class="blob shape-1"></div>
+  <div class="blob shape-2"></div>
+  
+  <div class="login-card">
+    <div class="brand-section">
+      <div class="logo-placeholder">
+        <span class="logo-initial">{{ brandName.charAt(0) }}</span>
+      </div>
+      <h1 class="brand-title">{{ brandName }}</h1>
+      <p class="subtitle">B2B Dashboard Access</p>
+    </div>
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
+      <div class="welcome-text">
+        <h2>Welcome Back</h2>
+        <p>Login to manage your carts, products, and analytics.</p>
+      </div>
+
+      <div class="input-group">
+        <label for="email">Email Address</label>
+        <input 
+          id="email" 
+          type="email" 
+          formControlName="email" 
+          placeholder="admin@example.com"
+          [class.invalid]="loginForm.get('email')?.invalid && loginForm.get('email')?.touched"
+        >
+      </div>
+
+      <div class="input-group">
+        <label for="password">Password</label>
+        <input 
+          id="password" 
+          type="password" 
+          formControlName="password" 
+          placeholder="••••••••"
+          [class.invalid]="loginForm.get('password')?.invalid && loginForm.get('password')?.touched"
+        >
+      </div>
+
+      <div class="form-actions">
+        <label class="remember-me">
+          <input type="checkbox">
+          <span>Remember me</span>
+        </label>
+        <a href="#" class="forgot-password">Forgot password?</a>
+      </div>
+
+      <button type="submit" class="submit-btn" [disabled]="loginForm.invalid">
+        Sign In to Dashboard
+      </button>
+    </form>
+  </div>
+</div>
