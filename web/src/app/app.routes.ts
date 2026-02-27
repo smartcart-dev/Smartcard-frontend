@@ -7,6 +7,7 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./layout/main-layout/main-layout.component').then(m => m.MainLayoutComponent),
     children: [
       { path: 'dashboard', loadComponent: () => import('./dashboard/dashboard.component').then(m => m.DashboardComponent) },
+      { path: 'store-map', loadComponent: () => import('./store-map/store-map.component').then(m => m.StoreMapComponent) },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
     ]
   },

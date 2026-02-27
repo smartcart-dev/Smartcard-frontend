@@ -1,0 +1,88 @@
+<div class="store-map-container">
+  <div class="header">
+    <div>
+      <h1>Store Map</h1>
+      <p>Visualize and manage your store layout and active carts.</p>
+    </div>
+    
+    <div class="controls">
+      <button class="toggle-btn" [class.active]="editMode" (click)="toggleEditMode()">
+        {{ editMode ? 'Exit Edit Mode' : 'Inspect Mode' }}
+      </button>
+      <button class="primary-btn" (click)="openSetupModal()">
+        ✨ Generate Map via AI
+      </button>
+    </div>
+  </div>
+
+  <div class="map-wrapper">
+    <div class="canvas-container" #canvasContainer></div>
+    
+    <!-- AI Generation Modal -->
+    <div class="modal-overlay" *ngIf="showSetupModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Setup 3D Store Map</h2>
+          <button class="close-btn" (click)="closeSetupModal()" [disabled]="isProcessing">✕</button>
+        </div>
+        
+        <form [formGroup]="setupForm" (ngSubmit)="submitSetup()" *ngIf="!isProcessing; else processingView">
+          <div class="form-row flex-row">
+            <div class="form-group flex-1">
+              <label for="numFloors">Number of Floors</label>
+              <input type="number" id="numFloors" formControlName="numFloors" min="1" max="5" class="form-control" />
+            </div>
+            <div class="form-group toggle-group flex-1">
+              <label for="hasBasement">Include Basement</label>
+              <label class="switch">
+                <input type="checkbox" id="hasBasement" formControlName="hasBasement">
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="stairsLocation">Stairs Location</label>
+            <select id="stairsLocation" formControlName="stairsLocation" class="form-control">
+              <option value="center">Center Core</option>
+              <option value="back">Back Wall</option>
+              <option value="front">Entrance (Front)</option>
+              <option value="left">Left Wing</option>
+              <option value="right">Right Wing</option>
+            </select>
+          </div>
+
+          <div formArrayName="floorSections" class="videos-section">
+            <h4 class="section-title">Sections per Level</h4>
+            <div class="form-group" *ngFor="let secCtrl of sectionsArray.controls; let i = index">
+              <label [for]="'sectionCount' + i">
+                Sections on {{ getLevelLabel(i) }}
+              </label>
+              <input type="number" [id]="'sectionCount' + i" [formControlName]="i" min="1" max="10" class="form-control" />
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" (click)="closeSetupModal()">Cancel</button>
+            <button type="submit" class="btn-submit" [disabled]="setupForm.invalid">Generate 3D Architectural Layout</button>
+          </div>
+        </form>
+
+        <ng-template #processingView>
+          <div class="processing-container">
+            <div class="spinner"></div>
+            <h3>Generating 3D Structural Layout</h3>
+            <p>Plotting dynamic floorplates, rendering materials, and scattering logical sections...</p>
+          </div>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+  
+  <div class="edit-panel" *ngIf="editMode && selectedMeshDetails">
+    <h3>Edit Selection</h3>
+    <p><strong>Name:</strong> {{ selectedMeshDetails.name }}</p>
+    <p><strong>Type:</strong> {{ selectedMeshDetails.type }}</p>
+    <button (click)="closeEditPanel()">Close</button>
+  </div>
+</div>
