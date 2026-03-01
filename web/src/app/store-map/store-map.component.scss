@@ -84,11 +84,14 @@
   /* Left Edit Toolbar */
   .edit-toolbar {
     width: 250px;
+    min-width: 250px;
+    flex-shrink: 0;
     padding: 24px;
     display: flex;
     flex-direction: column;
     gap: 12px;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
+    overflow-y: auto;
 
     h3 {
       font-size: 14px;
@@ -121,6 +124,66 @@
         background: rgba(56, 189, 248, 0.2);
         border-color: #38bdf8;
         color: #38bdf8;
+      }
+
+      &.delete-action {
+        border-color: rgba(239, 68, 68, 0.3);
+        color: #ef4444;
+        &:hover { background: rgba(239, 68, 68, 0.15); }
+      }
+    }
+
+    .form-group {
+      label { display: block; margin-bottom: 6px; color: #94a3b8; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .form-control {
+        width: 100%; padding: 10px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px; color: white; outline: none; transition: 0.2s; font-size: 13px;
+        &:focus { border-color: #38bdf8; }
+      }
+      .color-picker {
+        width: 100%; height: 36px; padding: 0; border: none; border-radius: 10px; cursor: pointer;
+        background: none;
+        &::-webkit-color-swatch-wrapper { padding: 0; }
+        &::-webkit-color-swatch { border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; }
+      }
+    }
+
+    .toolbar-actions {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+
+    .selected-props {
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 12px;
+
+      .prop-group {
+        margin-bottom: 12px;
+        label { 
+          display: block; margin-bottom: 6px; color: #94a3b8; 
+          font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; 
+        }
+        .prop-input {
+          width: 100%; padding: 10px 12px; background: rgba(0,0,0,0.35); 
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 10px; color: white; outline: none; transition: 0.2s; font-size: 13px;
+          &:focus { border-color: #38bdf8; }
+        }
+        .prop-color {
+          width: 100%; height: 36px; padding: 2px; border: 1px solid rgba(255,255,255,0.15); 
+          border-radius: 10px; cursor: pointer; background: rgba(0,0,0,0.3);
+          &::-webkit-color-swatch-wrapper { padding: 2px; }
+          &::-webkit-color-swatch { border: none; border-radius: 8px; }
+        }
+      }
+
+      .prop-actions {
+        display: flex; flex-direction: column; gap: 8px; margin-top: 8px;
+      }
+
+      .delete-btn {
+        border-color: rgba(239, 68, 68, 0.3) !important;
+        color: #ef4444 !important;
+        &:hover { background: rgba(239, 68, 68, 0.15) !important; }
       }
     }
   }

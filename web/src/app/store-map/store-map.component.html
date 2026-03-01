@@ -35,11 +35,28 @@
         <button class="tool-btn" [class.active]="transformMode === 'rotate'" (click)="setTransformMode('rotate')">↻ Rotate</button>
         <button class="tool-btn" [class.active]="transformMode === 'scale'" (click)="setTransformMode('scale')">⤢ Scale</button>
       </div>
+
+      <!-- Selected Object Properties - uses [hidden] to avoid *ngIf issues -->
+      <div class="tool-section mt-4 selected-props" [hidden]="!hasSelection">
+        <h3>🎯 Selected Object</h3>
+        <div class="prop-group">
+          <label for="objNameInput">Name</label>
+          <input id="objNameInput" type="text" class="prop-input" [(ngModel)]="selectedObjectName" (change)="updateObjectName()" placeholder="e.g. Clothing, Bakery">
+        </div>
+        <div class="prop-group">
+          <label for="objColorInput">Color</label>
+          <input id="objColorInput" type="color" class="prop-color" [(ngModel)]="selectedObjectColor" (input)="updateObjectColor()">
+        </div>
+        <div class="prop-actions">
+          <button class="tool-btn" (click)="duplicateSelected()">📋 Duplicate</button>
+          <button class="tool-btn delete-btn" (click)="deleteSelected()">🗑️ Delete</button>
+        </div>
+      </div>
     </div>
 
     <!-- ThreeJS Canvas -->
     <div class="map-wrapper">
-      <div class="canvas-container" #canvasContainer (click)="onMouseClick($event)"></div>
+      <div class="canvas-container" #canvasContainer (pointerdown)="onCanvasPointerDown($event)" (pointerup)="onCanvasPointerUp($event)"></div>
       
       <!-- Setup Modal -->
       <div class="modal-overlay premium-modal" *ngIf="showSetupModal">
@@ -87,29 +104,6 @@
         <button class="nav-btn" [disabled]="activeFloorIndex === 0" (click)="moveFloorDown()">
           ▼<br><small>DN</small>
         </button>
-      </div>
-    </div>
-    
-    <!-- Right Properties Panel -->
-    <div class="properties-panel glass-panel" *ngIf="editMode && hasSelection">
-      <div class="panel-header">
-        <h3>Properties</h3>
-        <button class="close-btn" (click)="deselectObject()">✕</button>
-      </div>
-
-      <div class="form-group mb-4">
-        <label>Name (e.g. Clothing, Bakery)</label>
-        <input type="text" class="form-control" [(ngModel)]="selectedObjectName" (change)="updateObjectName()" placeholder="Component Name">
-      </div>
-
-      <div class="form-group mb-4" *ngIf="selectedObjectType === 'block' || selectedObjectType === 'wall'">
-        <label>Color</label>
-        <input type="color" class="color-picker" [(ngModel)]="selectedObjectColor" (input)="updateObjectColor()">
-      </div>
-
-      <div class="panel-actions mt-4">
-        <button class="btn-duplicate" (click)="duplicateSelected()">📋 Duplicate</button>
-        <button class="btn-delete" (click)="deleteSelected()">🗑️ Delete</button>
       </div>
     </div>
 
