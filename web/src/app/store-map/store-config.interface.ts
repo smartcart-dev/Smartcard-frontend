@@ -1,72 +1,54 @@
-export interface StoreItem {
-  id: string;
+export interface SectionPreset {
+  type: string;
   name: string;
-  position: { x: number; y: number; z: number };
-  color?: string; // Hex color for the 3D representation
+  color: string;
+  icon: string;
+  defaultW: number; // % of canvas width
+  defaultH: number; // % of canvas height
 }
 
-export interface StoreSection {
+export const SECTION_PRESETS: SectionPreset[] = [
+  { type: 'entrance',    name: 'Entrance',       color: '#10b981', icon: '🚪', defaultW: 30, defaultH: 12 },
+  { type: 'grocery',    name: 'Grocery',         color: '#f59e0b', icon: '🛒', defaultW: 22, defaultH: 20 },
+  { type: 'clothing',   name: 'Clothing',        color: '#8b5cf6', icon: '👕', defaultW: 20, defaultH: 18 },
+  { type: 'footwear',   name: 'Footwear',        color: '#ec4899', icon: '👟', defaultW: 18, defaultH: 16 },
+  { type: 'electronics',name: 'Electronics',     color: '#3b82f6', icon: '💻', defaultW: 20, defaultH: 18 },
+  { type: 'home',       name: 'Home & Kitchen',  color: '#06b6d4', icon: '🏠', defaultW: 20, defaultH: 18 },
+  { type: 'billing',    name: 'Billing',         color: '#ef4444', icon: '🏧', defaultW: 22, defaultH: 14 },
+  { type: 'offers',     name: 'Offers Zone',     color: '#f97316', icon: '🏷️', defaultW: 16, defaultH: 14 },
+  { type: 'bakery',     name: 'Bakery',          color: '#d97706', icon: '🥐', defaultW: 16, defaultH: 14 },
+  { type: 'dairy',      name: 'Dairy',           color: '#2563eb', icon: '🥛', defaultW: 14, defaultH: 16 },
+  { type: 'pharmacy',   name: 'Pharmacy',        color: '#16a34a', icon: '💊', defaultW: 14, defaultH: 14 },
+  { type: 'sports',     name: 'Sports',          color: '#dc2626', icon: '⚽', defaultW: 18, defaultH: 16 },
+];
+
+export interface MapSection {
   id: string;
+  type: string;
   name: string;
-  position: { x: number; y: number; z: number };
-  size: { width: number; height: number; depth: number };
-  color?: string;
-  items: StoreItem[];
+  color: string;
+  icon: string;
+  aisle: string;
+  // Percentage-based position (0–100) relative to canvas
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
-export interface StoreFloor {
+export interface MapFloor {
   id: string;
+  name: string;
   level: number;
+  sections: MapSection[];
+}
+
+export interface StoreMapConfig {
+  storeName: string;
+  floors: MapFloor[];
+}
+
+export interface WizardFloorSetup {
   name: string;
-  size: { width: number; depth: number };
-  sections: StoreSection[];
+  selectedTypes: Set<string>;
 }
-
-export interface StoreConfig {
-  floors: StoreFloor[];
-  activeFloorId?: string;
-}
-
-// A mock layout to start with
-export const MOCK_STORE_CONFIG: StoreConfig = {
-  floors: [
-    {
-      id: 'floor-1',
-      level: 1,
-      name: 'Ground Floor',
-      size: { width: 100, depth: 100 },
-      sections: [
-        {
-          id: 'sec-produce',
-          name: 'Produce',
-          position: { x: -20, y: 0, z: -20 },
-          size: { width: 20, height: 5, depth: 30 },
-          color: '#22c55e', // Green
-          items: [
-            { id: 'item-apples', name: 'Apples', position: { x: -20, y: 5, z: -25 }, color: '#ef4444' },
-            { id: 'item-bananas', name: 'Bananas', position: { x: -20, y: 5, z: -15 }, color: '#eab308' },
-          ]
-        },
-        {
-          id: 'sec-dairy',
-          name: 'Dairy',
-          position: { x: 30, y: 0, z: -20 },
-          size: { width: 15, height: 10, depth: 40 },
-          color: '#3b82f6', // Blue
-          items: [
-            { id: 'item-milk', name: 'Milk', position: { x: 30, y: 10, z: -30 }, color: '#ffffff' },
-          ]
-        },
-        {
-          id: 'sec-bakery',
-          name: 'Bakery',
-          position: { x: 0, y: 0, z: 25 },
-          size: { width: 30, height: 8, depth: 15 },
-          color: '#f97316', // Orange
-          items: []
-        }
-      ]
-    }
-  ],
-  activeFloorId: 'floor-1'
-};

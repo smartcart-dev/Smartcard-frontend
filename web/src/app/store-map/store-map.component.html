@@ -1,111 +1,359 @@
-﻿<div class="store-map-container">
-  <!-- Header -->
-  <div class="header glass-panel">
-    <div class="title-area">
-      <h1>Γ£¿ Store Architect 3D</h1>
-      <p>Clean, fast, optimized multi-floor builder.</p>
-    </div>
-    <div class="header-actions">
-      <button class="secondary-btn" (click)="toggleEditMode()">
-        <span *ngIf="!editMode">Γ£Å∩╕Å Edit Mode</span>
-        <span *ngIf="editMode">≡ƒæü∩╕Å View Mode</span>
-      </button>
-      <button class="primary-btn pulse-glow" (click)="openSetupModal()">
-         ΓÜí Generate
-      </button>
-    </div>
-  </div>
-
-  <!-- Map Area -->
-  <div class="layout-body" [class.editing]="editMode">
-    
-    <!-- Left Edit Toolbar -->
-    <div class="edit-toolbar glass-panel" *ngIf="editMode">
-      <div class="tool-section">
-        <h3>Components</h3>
-        <button class="tool-btn" (click)="spawnObject('stairs')">≡ƒ¬£ Stairs</button>
-        <button class="tool-btn" (click)="spawnObject('block')">≡ƒôª Block</button>
-        <button class="tool-btn" (click)="spawnObject('wall')">≡ƒº▒ Wall</button>
-        <button class="tool-btn" (click)="spawnObject('machine')">ΓÜÖ∩╕Å Machine</button>
-        <button class="tool-btn" (click)="spawnObject('plant')">≡ƒ¬┤ Plant</button>
-      </div>
-      <div class="tool-section mt-4">
-        <h3>Controls</h3>
-        <button class="tool-btn" [class.active]="transformMode === 'translate'" (click)="setTransformMode('translate')">Γÿ⌐ Move</button>
-        <button class="tool-btn" [class.active]="transformMode === 'rotate'" (click)="setTransformMode('rotate')">Γå╗ Rotate</button>
-        <button class="tool-btn" [class.active]="transformMode === 'scale'" (click)="setTransformMode('scale')">Γñó Scale</button>
-      </div>
-
-      <!-- Selected Object Properties - uses [hidden] to avoid *ngIf issues -->
-      <div class="tool-section mt-4 selected-props" [hidden]="!hasSelection">
-        <h3>≡ƒÄ» Selected Object</h3>
-        <div class="prop-group">
-          <label for="objNameInput">Name</label>
-          <input id="objNameInput" type="text" class="prop-input" [(ngModel)]="selectedObjectName" (change)="updateObjectName()" placeholder="e.g. Clothing, Bakery">
+﻿<div class="sm-root">
+  <!-- ══════════════ SETUP WIZARD OVERLAY ══════════════ -->
+  <div class="wizard-overlay" *ngIf="wizardActive">
+    <div class="wizard-modal">
+      <!-- Step 1: Store Info -->
+      <ng-container *ngIf="wizardStep === 1">
+        <div class="wiz-header">
+          <div class="wiz-logo">🛒</div>
+          <h2>Build Your Store Map</h2>
+          <p>Set up your store layout in two quick steps</p>
         </div>
-        <div class="prop-group">
-          <label for="objColorInput">Color</label>
-          <input id="objColorInput" type="color" class="prop-color" [(ngModel)]="selectedObjectColor" (input)="updateObjectColor()">
-        </div>
-        <div class="prop-actions">
-          <button class="tool-btn" (click)="duplicateSelected()">≡ƒôï Duplicate</button>
-          <button class="tool-btn delete-btn" (click)="deleteSelected()">≡ƒùæ∩╕Å Delete</button>
-        </div>
-      </div>
-    </div>
 
-    <!-- ThreeJS Canvas -->
-    <div class="map-wrapper">
-      <div class="canvas-container" #canvasContainer (pointerdown)="onCanvasPointerDown($event)" (pointerup)="onCanvasPointerUp($event)"></div>
-      
-      <!-- Setup Modal -->
-      <div class="modal-overlay premium-modal" *ngIf="showSetupModal">
-        <div class="modal-content glass-panel">
-          <div class="modal-header">
-             <h2>Γ£¿ Initialize Map</h2>
-             <button class="close-btn" (click)="closeSetupModal()" [disabled]="isProcessing">Γ£ò</button>
+        <div class="wiz-step-indicator">
+          <span class="step active">1</span>
+          <span class="step-line"></span>
+          <span class="step">2</span>
+        </div>
+
+        <div class="wiz-body">
+          <div class="wiz-field">
+            <label>🏪 Store Name</label>
+            <input
+              type="text"
+              [(ngModel)]="storeName"
+              placeholder="e.g. Smart Bazaar, BigMart..."
+            />
           </div>
-          
-          <ng-container *ngIf="!isProcessing; else processingView">
-            <div class="form-group mb-4">
-              <label>Number of Floors</label>
-              <input type="number" [(ngModel)]="numFloors" min="1" max="10" class="form-control" />
+          <div class="wiz-field">
+            <label>🏢 Number of Floors</label>
+            <div class="num-picker">
+              <button
+                (click)="
+                  numFloors = numFloors > 1 ? numFloors - 1 : 1;
+                  updateFloorCount()
+                "
+              >
+                −
+              </button>
+              <span class="num-val">{{ numFloors }}</span>
+              <button
+                (click)="
+                  numFloors = numFloors < 5 ? numFloors + 1 : 5;
+                  updateFloorCount()
+                "
+              >
+                +
+              </button>
             </div>
-            <div class="form-group mb-4 toggle-group">
-              <label>Include Basement</label>
-              <label class="switch">
-                <input type="checkbox" [(ngModel)]="hasBasement">
-                <span class="slider round"></span>
-              </label>
+          </div>
+          <div class="wiz-floors-list">
+            <div
+              *ngFor="let f of wizardFloors; let i = index"
+              class="wiz-floor-row"
+            >
+              <span class="floor-badge">F{{ i }}</span>
+              <input
+                type="text"
+                [(ngModel)]="f.name"
+                placeholder="Floor name"
+              />
             </div>
-            <div class="modal-actions mt-4">
-              <button class="btn-cancel" (click)="closeSetupModal()">Cancel</button>
-              <button class="btn-submit pulse-glow" (click)="generateMap()">≡ƒÜÇ Build Fast</button>
+          </div>
+        </div>
+        <div class="wiz-footer">
+          <button
+            class="wiz-next-btn"
+            (click)="goToStep2()"
+            [disabled]="!storeName.trim()"
+          >
+            Next: Choose Sections →
+          </button>
+        </div>
+      </ng-container>
+
+      <!-- Step 2: Section Picker -->
+      <ng-container *ngIf="wizardStep === 2">
+        <div class="wiz-header">
+          <h2>Choose Sections</h2>
+          <p>
+            {{ currentWizardFloorSetup.name }} &mdash; pick the areas for this
+            floor
+          </p>
+        </div>
+
+        <div class="wiz-step-indicator">
+          <span class="step done">✓</span>
+          <span class="step-line active"></span>
+          <span class="step active">2</span>
+        </div>
+
+        <div class="wiz-floor-progress">
+          <span
+            *ngFor="let f of wizardFloors; let i = index"
+            class="floor-dot"
+            [class.active]="i === currentWizardFloor"
+            [class.done]="i < currentWizardFloor"
+          >
+          </span>
+        </div>
+
+        <div class="preset-grid">
+          <button
+            *ngFor="let p of allPresets"
+            class="preset-card"
+            [class.selected]="isPresetSelected(p.type)"
+            (click)="togglePreset(p.type)"
+          >
+            <span class="preset-icon">{{ p.icon }}</span>
+            <span class="preset-name">{{ p.name }}</span>
+            <span class="check" *ngIf="isPresetSelected(p.type)">✓</span>
+          </button>
+        </div>
+
+        <div class="wiz-footer wiz-footer-row">
+          <button class="wiz-back-btn" (click)="wizardPrev()">← Back</button>
+          <button class="wiz-next-btn" (click)="wizardNext()">
+            {{ isLastWizardFloor() ? '🚀 Generate Map' : 'Next Floor →' }}
+          </button>
+        </div>
+      </ng-container>
+    </div>
+  </div>
+
+  <!-- ══════════════ MAIN APP (after wizard) ══════════════ -->
+  <ng-container *ngIf="!wizardActive && config">
+    <!-- ─── HEADER ─── -->
+    <header class="sm-header">
+      <div class="sm-logo">
+        <span class="logo-cart">🛒</span>
+        <span class="logo-text"
+          ><strong>SMART</strong> <span class="logo-accent">BAZAAR</span></span
+        >
+      </div>
+
+      <div class="sm-header-center">
+        <h1>Store Navigation Map</h1>
+        <div class="floor-pills">
+          <button
+            *ngFor="let fl of config.floors; let i = index"
+            class="floor-pill"
+            [class.active]="activeFloorIndex === i"
+            (click)="switchFloor(i)"
+          >
+            {{ fl.name }}
+          </button>
+        </div>
+      </div>
+
+      <div class="sm-header-actions">
+        <button class="hdr-btn" (click)="wizardActive = true">⚙ Setup</button>
+        <button
+          class="hdr-btn"
+          [class.active]="editMode"
+          (click)="toggleEditMode()"
+        >
+          {{ editMode ? '👁 View' : '✏️ Edit' }}
+        </button>
+        <button class="hdr-btn primary" (click)="saveMap()">💾 Save Map</button>
+      </div>
+    </header>
+
+    <!-- ─── BODY ─── -->
+    <div class="sm-body">
+      <!-- LEFT SIDEBAR -->
+      <aside class="sm-sidebar">
+        <div class="sidebar-title">
+          <span>Floor Sections</span>
+          <span class="floor-tag">{{ activeFloor?.name }}</span>
+        </div>
+
+        <div class="section-list">
+          <div
+            *ngFor="let s of activeSections"
+            class="section-item"
+            [class.selected]="selectedSectionId === s.id"
+            (click)="selectSection(s.id)"
+          >
+            <span class="s-dot" [style.background]="s.color"></span>
+            <span class="s-icon">{{ s.icon }}</span>
+            <span class="s-name">{{ s.name }}</span>
+            <span class="s-chevron">›</span>
+          </div>
+        </div>
+
+        <button
+          class="add-section-btn"
+          (click)="showAddSectionPanel = !showAddSectionPanel"
+        >
+          + Add Section
+        </button>
+
+        <!-- Add Section Panel -->
+        <div class="add-panel" *ngIf="showAddSectionPanel">
+          <div class="add-panel-title">Choose a section type:</div>
+          <div
+            *ngFor="let p of allPresets"
+            class="add-chip"
+            (click)="addSection(p)"
+          >
+            {{ p.icon }} {{ p.name }}
+          </div>
+        </div>
+
+        <!-- Floor mini-maps -->
+        <div class="mini-floor-strip" *ngIf="config.floors.length > 1">
+          <div
+            *ngFor="let fl of config.floors; let i = index"
+            class="mini-floor"
+            [class.active]="activeFloorIndex === i"
+            (click)="switchFloor(i)"
+          >
+            <div class="mini-label">{{ fl.name }}</div>
+            <div class="mini-canvas">
+              <div
+                *ngFor="let ms of fl.sections"
+                class="mini-block"
+                [style.left.%]="ms.x"
+                [style.top.%]="ms.y"
+                [style.width.%]="ms.w"
+                [style.height.%]="ms.h"
+                [style.background]="ms.color"
+              ></div>
             </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ─── CANVAS MAP ─── -->
+      <main class="sm-canvas-area" #canvasWrapper>
+        <canvas #mapCanvas></canvas>
+
+        <div class="edit-badge" *ngIf="editMode">
+          ✏️ Edit Mode — Click sections to select, drag to move
+        </div>
+
+        <!-- Selected section properties (edit mode) -->
+        <div class="section-props-panel" *ngIf="editMode && selectedSection">
+          <div class="props-header" [style.borderColor]="selectedSection.color">
+            {{ selectedSection.icon }} {{ selectedSection.name }}
+          </div>
+          <div class="prop-row">
+            <label>Name</label>
+            <input
+              type="text"
+              [(ngModel)]="selectedSection.name"
+              placeholder="Section name"
+            />
+          </div>
+          <div class="prop-row">
+            <label>Aisle</label>
+            <input
+              type="text"
+              [(ngModel)]="selectedSection.aisle"
+              placeholder="e.g. Aisle 5"
+            />
+          </div>
+          <div class="prop-row">
+            <label>Color</label>
+            <input type="color" [(ngModel)]="selectedSection.color" />
+          </div>
+          <button class="delete-section-btn" (click)="deleteSelectedSection()">
+            🗑️ Delete Section
+          </button>
+        </div>
+      </main>
+
+      <!-- RIGHT PANEL -->
+      <aside class="sm-right">
+        <!-- Search -->
+        <div class="search-card">
+          <div class="search-row">
+            <input
+              type="text"
+              [(ngModel)]="searchQuery"
+              placeholder="Search Product..."
+              (keyup.enter)="searchProduct()"
+            />
+            <button class="search-icon-btn" (click)="searchProduct()">
+              🔍
+            </button>
+          </div>
+        </div>
+
+        <!-- Search result -->
+        <div class="result-card" *ngIf="searchResult">
+          <div
+            class="result-icon-box"
+            [style.background]="searchResult.color + '22'"
+          >
+            {{ searchResult.icon }}
+          </div>
+          <div class="result-info">
+            <div class="result-name">{{ searchResult.name }}</div>
+            <div class="result-aisle" [style.color]="searchResult.color">
+              {{ searchResult.aisle }}
+            </div>
+          </div>
+          <button class="nav-quick-btn">Navigate →</button>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-card">
+          <h4 class="nav-title">Navigation</h4>
+          <ng-container *ngIf="navigationActive && searchResult">
+            <div class="nav-steps">
+              <div class="nav-row">
+                <div class="nav-dot you-here-dot"></div>
+                <span>You Are Here</span>
+              </div>
+              <div class="nav-connector"></div>
+              <div class="nav-row">
+                <div
+                  class="nav-dot"
+                  [style.background]="searchResult.color"
+                ></div>
+                <span>{{ searchResult.name }}</span>
+              </div>
+              <div class="nav-connector"></div>
+              <div class="nav-row">
+                <div class="nav-dot dest-dot"></div>
+                <span class="nav-aisle-lbl">{{ searchResult.aisle }}</span>
+              </div>
+            </div>
+            <button class="start-route-btn">🚀 Start Route</button>
           </ng-container>
-
-          <ng-template #processingView>
-            <div class="processing-container">
-              <div class="spinner"></div>
-              <h3 class="gradient-text">Generating Empty Floors...</h3>
-            </div>
-          </ng-template>
+          <p class="nav-placeholder" *ngIf="!navigationActive">
+            🔍 Search a product above to see the route
+          </p>
         </div>
-      </div>
 
-      <!-- Floor Navigation Controls -->
-      <div class="floor-nav-panel glass-panel" *ngIf="totalLevels > 1 && !showSetupModal">
-        <button class="nav-btn" [disabled]="activeFloorIndex === totalLevels - 1" (click)="moveFloorUp()">
-          Γû▓<br><small>UP</small>
-        </button>
-        <div class="floor-indicator">
-          <span class="level-name">{{ getActiveFloorName() }}</span>
+        <!-- Legend hint -->
+        <div class="legend-card">
+          <div class="legend-row" *ngFor="let s of activeSections">
+            <span class="leg-dot" [style.background]="s.color"></span>
+            <span class="leg-name">{{ s.name }}</span>
+            <span class="leg-aisle">{{ s.aisle }}</span>
+          </div>
         </div>
-        <button class="nav-btn" [disabled]="activeFloorIndex === 0" (click)="moveFloorDown()">
-          Γû╝<br><small>DN</small>
-        </button>
-      </div>
+      </aside>
     </div>
 
-  </div>
+    <!-- ─── BOTTOM LEGEND ─── -->
+    <footer class="sm-legend">
+      <span class="leg-label">Legend</span>
+      <div class="leg-item">
+        <span class="leg-path-line"></span>
+        <span>Path</span>
+      </div>
+      <div class="leg-item">
+        <span class="leg-circle you"></span>
+        <span>Current Location</span>
+      </div>
+      <div *ngFor="let s of activeSections" class="leg-item">
+        <span class="leg-circle" [style.background]="s.color"></span>
+        <span>{{ s.name }}</span>
+      </div>
+    </footer>
+  </ng-container>
 </div>
