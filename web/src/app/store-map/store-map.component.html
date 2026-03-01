@@ -1,88 +1,117 @@
 <div class="store-map-container">
-  <div class="header">
-    <div>
-      <h1>Store Map</h1>
-      <p>Visualize and manage your store layout and active carts.</p>
+  <!-- Header -->
+  <div class="header glass-panel">
+    <div class="title-area">
+      <h1>✨ Store Architect 3D</h1>
+      <p>Clean, fast, optimized multi-floor builder.</p>
     </div>
-    
-    <div class="controls">
-      <button class="toggle-btn" [class.active]="editMode" (click)="toggleEditMode()">
-        {{ editMode ? 'Exit Edit Mode' : 'Inspect Mode' }}
+    <div class="header-actions">
+      <button class="secondary-btn" (click)="toggleEditMode()">
+        <span *ngIf="!editMode">✏️ Edit Mode</span>
+        <span *ngIf="editMode">👁️ View Mode</span>
       </button>
-      <button class="primary-btn" (click)="openSetupModal()">
-        ✨ Generate Map via AI
+      <button class="primary-btn pulse-glow" (click)="openSetupModal()">
+         ⚡ Generate
       </button>
     </div>
   </div>
 
-  <div class="map-wrapper">
-    <div class="canvas-container" #canvasContainer></div>
+  <!-- Map Area -->
+  <div class="layout-body" [class.editing]="editMode">
     
-    <!-- AI Generation Modal -->
-    <div class="modal-overlay" *ngIf="showSetupModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Setup 3D Store Map</h2>
-          <button class="close-btn" (click)="closeSetupModal()" [disabled]="isProcessing">✕</button>
-        </div>
-        
-        <form [formGroup]="setupForm" (ngSubmit)="submitSetup()" *ngIf="!isProcessing; else processingView">
-          <div class="form-row flex-row">
-            <div class="form-group flex-1">
-              <label for="numFloors">Number of Floors</label>
-              <input type="number" id="numFloors" formControlName="numFloors" min="1" max="5" class="form-control" />
+    <!-- Left Edit Toolbar -->
+    <div class="edit-toolbar glass-panel" *ngIf="editMode">
+      <div class="tool-section">
+        <h3>Components</h3>
+        <button class="tool-btn" (click)="spawnObject('stairs')">🪜 Stairs</button>
+        <button class="tool-btn" (click)="spawnObject('block')">📦 Block</button>
+        <button class="tool-btn" (click)="spawnObject('wall')">🧱 Wall</button>
+        <button class="tool-btn" (click)="spawnObject('machine')">⚙️ Machine</button>
+        <button class="tool-btn" (click)="spawnObject('plant')">🪴 Plant</button>
+      </div>
+      <div class="tool-section mt-4">
+        <h3>Controls</h3>
+        <button class="tool-btn" [class.active]="transformMode === 'translate'" (click)="setTransformMode('translate')">☩ Move</button>
+        <button class="tool-btn" [class.active]="transformMode === 'rotate'" (click)="setTransformMode('rotate')">↻ Rotate</button>
+        <button class="tool-btn" [class.active]="transformMode === 'scale'" (click)="setTransformMode('scale')">⤢ Scale</button>
+      </div>
+    </div>
+
+    <!-- ThreeJS Canvas -->
+    <div class="map-wrapper">
+      <div class="canvas-container" #canvasContainer (click)="onMouseClick($event)"></div>
+      
+      <!-- Setup Modal -->
+      <div class="modal-overlay premium-modal" *ngIf="showSetupModal">
+        <div class="modal-content glass-panel">
+          <div class="modal-header">
+             <h2>✨ Initialize Map</h2>
+             <button class="close-btn" (click)="closeSetupModal()" [disabled]="isProcessing">✕</button>
+          </div>
+          
+          <ng-container *ngIf="!isProcessing; else processingView">
+            <div class="form-group mb-4">
+              <label>Number of Floors</label>
+              <input type="number" [(ngModel)]="numFloors" min="1" max="10" class="form-control" />
             </div>
-            <div class="form-group toggle-group flex-1">
-              <label for="hasBasement">Include Basement</label>
+            <div class="form-group mb-4 toggle-group">
+              <label>Include Basement</label>
               <label class="switch">
-                <input type="checkbox" id="hasBasement" formControlName="hasBasement">
+                <input type="checkbox" [(ngModel)]="hasBasement">
                 <span class="slider round"></span>
               </label>
             </div>
-          </div>
-
-          <div class="form-group">
-            <label for="stairsLocation">Stairs Location</label>
-            <select id="stairsLocation" formControlName="stairsLocation" class="form-control">
-              <option value="center">Center Core</option>
-              <option value="back">Back Wall</option>
-              <option value="front">Entrance (Front)</option>
-              <option value="left">Left Wing</option>
-              <option value="right">Right Wing</option>
-            </select>
-          </div>
-
-          <div formArrayName="floorSections" class="videos-section">
-            <h4 class="section-title">Sections per Level</h4>
-            <div class="form-group" *ngFor="let secCtrl of sectionsArray.controls; let i = index">
-              <label [for]="'sectionCount' + i">
-                Sections on {{ getLevelLabel(i) }}
-              </label>
-              <input type="number" [id]="'sectionCount' + i" [formControlName]="i" min="1" max="10" class="form-control" />
+            <div class="modal-actions mt-4">
+              <button class="btn-cancel" (click)="closeSetupModal()">Cancel</button>
+              <button class="btn-submit pulse-glow" (click)="generateMap()">🚀 Build Fast</button>
             </div>
-          </div>
+          </ng-container>
 
-          <div class="modal-actions">
-            <button type="button" class="btn-cancel" (click)="closeSetupModal()">Cancel</button>
-            <button type="submit" class="btn-submit" [disabled]="setupForm.invalid">Generate 3D Architectural Layout</button>
-          </div>
-        </form>
+          <ng-template #processingView>
+            <div class="processing-container">
+              <div class="spinner"></div>
+              <h3 class="gradient-text">Generating Empty Floors...</h3>
+            </div>
+          </ng-template>
+        </div>
+      </div>
 
-        <ng-template #processingView>
-          <div class="processing-container">
-            <div class="spinner"></div>
-            <h3>Generating 3D Structural Layout</h3>
-            <p>Plotting dynamic floorplates, rendering materials, and scattering logical sections...</p>
-          </div>
-        </ng-template>
+      <!-- Floor Navigation Controls -->
+      <div class="floor-nav-panel glass-panel" *ngIf="totalLevels > 1 && !showSetupModal">
+        <button class="nav-btn" [disabled]="activeFloorIndex === totalLevels - 1" (click)="moveFloorUp()">
+          ▲<br><small>UP</small>
+        </button>
+        <div class="floor-indicator">
+          <span class="level-name">{{ getActiveFloorName() }}</span>
+        </div>
+        <button class="nav-btn" [disabled]="activeFloorIndex === 0" (click)="moveFloorDown()">
+          ▼<br><small>DN</small>
+        </button>
       </div>
     </div>
-  </div>
-  
-  <div class="edit-panel" *ngIf="editMode && selectedMeshDetails">
-    <h3>Edit Selection</h3>
-    <p><strong>Name:</strong> {{ selectedMeshDetails.name }}</p>
-    <p><strong>Type:</strong> {{ selectedMeshDetails.type }}</p>
-    <button (click)="closeEditPanel()">Close</button>
+    
+    <!-- Right Properties Panel -->
+    <div class="properties-panel glass-panel" *ngIf="editMode && hasSelection">
+      <div class="panel-header">
+        <h3>Properties</h3>
+        <button class="close-btn" (click)="deselectObject()">✕</button>
+      </div>
+
+      <div class="form-group mb-4">
+        <label>Name (e.g. Clothing, Bakery)</label>
+        <input type="text" class="form-control" [(ngModel)]="selectedObjectName" (change)="updateObjectName()" placeholder="Component Name">
+      </div>
+
+      <div class="form-group mb-4" *ngIf="selectedObjectType === 'block' || selectedObjectType === 'wall'">
+        <label>Color</label>
+        <input type="color" class="color-picker" [(ngModel)]="selectedObjectColor" (input)="updateObjectColor()">
+      </div>
+
+      <div class="panel-actions mt-4">
+        <button class="btn-duplicate" (click)="duplicateSelected()">📋 Duplicate</button>
+        <button class="btn-delete" (click)="deleteSelected()">🗑️ Delete</button>
+      </div>
+    </div>
+
   </div>
 </div>

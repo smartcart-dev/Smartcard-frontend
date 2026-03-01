@@ -18,9 +18,11 @@
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@types/three": "^0.183.1",
     "axios": "^1.6.0",
     "reflect-metadata": "^0.1.13",
-    "rxjs": "~7.8.0"
+    "rxjs": "~7.8.0",
+    "three": "^0.183.1"
   },
   "devDependencies": {
     "@analogjs/vite-plugin-angular": "~2.1.2",
