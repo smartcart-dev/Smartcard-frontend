@@ -1,34 +1,19 @@
-import { Component, ElementRef, ViewChild, AfterViewInit, OnDestroy, ChangeDetectorRef, inject, NgZone } from '@angular/core';
+﻿import { Component, ElementRef, ViewChild, AfterViewInit, OnDestroy, ChangeDetectorRef, inject, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import { Store } from '@ngrx/store';
-import { Subscription } from 'rxjs';
-import {
-   generateMap as generateMapAction,
-   toggleEditMode as toggleEditModeAction,
-   setTransformMode as setTransformModeAction,
-   moveFloorUp as moveFloorUpAction,
-   moveFloorDown as moveFloorDownAction,
-   selectObject as selectObjectAction,
-   deselectObject as deselectObjectAction,
-   updateObjectDetails as updateObjectDetailsAction,
-   selectStoreMapState,
-   selectActiveFloorName,
-   StoreMapState,
-   FloorsData
-} from '@smartcart-platform/data-access-store-map';
+
 @Component({
-   selector: 'app-store-map',
-   standalone: true,
-   imports: [CommonModule, FormsModule],
-   templateUrl: './store-map.component.html',
-   styleUrl: './store-map.component.scss',
+  selector: 'app-store-map',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  templateUrl: './store-map.component.html',
+  styleUrl: './store-map.component.scss',
 })
 export class StoreMapComponent implements AfterViewInit, OnDestroy {
-   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef<HTMLDivElement>;
 
   // UI State
   showSetupModal = false;
@@ -45,9 +30,10 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
   selectedObjectColor = '#ffffff';
   selectedObjectType = '';
 
-   // Store Subscriptions and State
-   private store = inject(Store);
-   private subscriptions = new Subscription();
+  // Floor Navigation State
+  activeFloorIndex = 0;
+  totalLevels = 1;
+  floorsData: { id: string, name: string, level: number }[] = [];
 
   // Pre-rendered Floor Cache (3 Types)
   private prefabs: {
@@ -93,14 +79,15 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     this.scene?.clear();
   }
 
-   private cdr = inject(ChangeDetectorRef);
-   private ngZone = inject(NgZone);
+  openSetupModal(): void {
+    this.showSetupModal = true;
+  }
 
-   constructor() {
-      this.subscriptions.add(
-         this.store.select(selectStoreMapState).subscribe(state => {
-            const previousActiveFloorId = this.storeState?.floorsData?.[this.storeState?.activeFloorIndex]?.id;
-            this.storeState = state;
+  closeSetupModal(): void {
+    if (!this.isProcessing) {
+      this.showSetupModal = false;
+    }
+  }
 
   generateMap(): void {
     if (this.numFloors < 1) return;
@@ -109,19 +96,20 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     this.totalLevels = this.hasBasement ? this.numFloors + 1 : this.numFloors;
     this.activeFloorIndex = this.hasBasement ? 1 : 0;
 
-            // Update form bindings when selection changes
-            if (state.hasSelection) {
-               this.selectedObjectName = state.selectedObjectName;
-               this.selectedObjectColor = state.selectedObjectColor;
-               this.selectedObjectType = state.selectedObjectType;
-            }
+    for (let i = 0; i < this.totalLevels; i++) {
+       const isBasement = this.hasBasement && i === 0;
+       const levelNumber = isBasement ? -1 : (this.hasBasement ? i : i + 1);
+       
+       this.floorsData.push({
+          id: `floor-${levelNumber}`,
+          name: isBasement ? 'Basement' : (levelNumber === 0 ? 'Ground Floor' : `Floor ${levelNumber}`),
+          level: levelNumber
+       });
+    }
 
-            // When selection state changes from the store, ensure the transform control is attached/detached
-            if (!state.hasSelection && this.currentSelectedMesh) {
-               this.internalDeselectObject();
-            }
-         })
-      );
+    this.focusOnActiveFloor();
+    this.closeSetupModal();
+  }
 
   private createFloorPrefab(type: 'basement' | 'ground' | 'upper'): THREE.Group {
      const group = new THREE.Group();
@@ -160,33 +148,30 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
         thickness: 0.5, ior: 1.5
      });
 
-   ngOnDestroy(): void {
-      if (this.animationId !== null) cancelAnimationFrame(this.animationId);
-      window.removeEventListener('resize', this.onWindowResize.bind(this));
-      this.renderer?.dispose();
-      this.scene?.clear();
-   }
+     const wallGeoX = new THREE.BoxGeometry(floorSize, wallHeight, wallThickness);
+     const wallGeoZ = new THREE.BoxGeometry(wallThickness, wallHeight, floorSize);
 
-   openSetupModal(): void {
-      this.showSetupModal = true;
-   }
+     // Back Wall
+     const backWall = new THREE.Mesh(wallGeoX, solidWallMat);
+     backWall.position.set(0, wallHeight / 2, -floorSize / 2);
+     backWall.receiveShadow = true; backWall.castShadow = true;
 
-   closeSetupModal(): void {
-      if (!this.isProcessing) {
-         this.showSetupModal = false;
-      }
-   }
+     // Left Wall
+     const leftWall = new THREE.Mesh(wallGeoZ, solidWallMat);
+     leftWall.position.set(-floorSize / 2, wallHeight / 2, 0);
+     leftWall.receiveShadow = true; leftWall.castShadow = true;
 
-   generateMap(): void {
-      if (this.numFloors < 1) return;
+     // Right Wall
+     const rightWall = new THREE.Mesh(wallGeoZ, solidWallMat);
+     rightWall.position.set(floorSize / 2, wallHeight / 2, 0);
+     rightWall.receiveShadow = true; rightWall.castShadow = true;
 
      // Front Wall (Glass for ground floor)
      const frontWall = new THREE.Mesh(wallGeoX, type === 'ground' ? glassWallMat : solidWallMat);
      frontWall.position.set(0, wallHeight / 2, floorSize / 2);
      if (type !== 'ground') { frontWall.receiveShadow = true; frontWall.castShadow = true; }
 
-      this.closeSetupModal();
-   }
+     group.add(backWall, leftWall, rightWall, frontWall);
 
      if (type === 'ground') {
         const metalMat = new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.9, roughness: 0.15 });
@@ -199,53 +184,61 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
         const dT = new THREE.Mesh(new THREE.BoxGeometry(30, 2, 3), metalMat);
         dT.position.set(0, 20, floorSize / 2);
 
-      const floorGeo = new THREE.PlaneGeometry(floorSize, floorSize);
-      const floorMat = new THREE.MeshStandardMaterial({
-         color: type === 'basement' ? '#94a3b8' : '#cbd5e1',
-         roughness: 0.3,
-         metalness: 0.1,
-         side: THREE.DoubleSide
-      });
+        group.add(dL, dR, dT);
+     }
 
-      const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-      floorMesh.rotation.x = -Math.PI / 2;
-      floorMesh.receiveShadow = true;
-      group.add(floorMesh);
+     group.visible = false;
+     this.scene.add(group);
+     return group;
+  }
 
-      const gridColor = type === 'basement' ? '#475569' : '#94a3b8';
-      const grid = new THREE.GridHelper(floorSize, 30, gridColor, gridColor);
-      grid.position.y = 0.1;
-      group.add(grid);
+  private preRenderFloorPool(): void {
+    this.prefabs.basement = this.createFloorPrefab('basement');
+    this.prefabs.ground = this.createFloorPrefab('ground');
+    this.prefabs.upper = this.createFloorPrefab('upper');
+  }
 
   private assembleFloors(floors: number, basement: boolean): void {
     this.floorsData = [];
     this.totalLevels = basement ? floors + 1 : floors;
     this.activeFloorIndex = basement ? 1 : 0;
 
-      const wallGeoX = new THREE.BoxGeometry(floorSize, wallHeight, wallThickness);
-      const wallGeoZ = new THREE.BoxGeometry(wallThickness, wallHeight, floorSize);
+    for (let i = 0; i < this.totalLevels; i++) {
+       const isBasement = basement && i === 0;
+       const levelNumber = isBasement ? -1 : (basement ? i : i + 1);
+       
+       this.floorsData.push({
+          id: `floor-${levelNumber}`,
+          name: isBasement ? 'Basement' : (levelNumber === 0 ? 'Ground Floor' : `Floor ${levelNumber}`),
+          level: levelNumber
+       });
+    }
 
-      // Back Wall
-      const backWall = new THREE.Mesh(wallGeoX, solidWallMat);
-      backWall.position.set(0, wallHeight / 2, -floorSize / 2);
-      backWall.receiveShadow = true; backWall.castShadow = true;
+    this.focusOnActiveFloor();
+  }
 
-      // Left Wall
-      const leftWall = new THREE.Mesh(wallGeoZ, solidWallMat);
-      leftWall.position.set(-floorSize / 2, wallHeight / 2, 0);
-      leftWall.receiveShadow = true; leftWall.castShadow = true;
+  // --- NAVIGATION --- //
 
-      // Right Wall
-      const rightWall = new THREE.Mesh(wallGeoZ, solidWallMat);
-      rightWall.position.set(floorSize / 2, wallHeight / 2, 0);
-      rightWall.receiveShadow = true; rightWall.castShadow = true;
+  getActiveFloorName(): string {
+    if (this.floorsData[this.activeFloorIndex]) {
+       return this.floorsData[this.activeFloorIndex].name;
+    }
+    return '';
+  }
 
-      // Front Wall (Glass for ground floor, solid for others)
-      const frontWall = new THREE.Mesh(wallGeoX, type === 'ground' ? glassWallMat : solidWallMat);
-      frontWall.position.set(0, wallHeight / 2, floorSize / 2);
-      if (type !== 'ground') { frontWall.receiveShadow = true; frontWall.castShadow = true; }
+  moveFloorUp(): void {
+    if (this.activeFloorIndex < this.totalLevels - 1) {
+      this.activeFloorIndex++;
+      this.focusOnActiveFloor();
+    }
+  }
 
-      group.add(backWall, leftWall, rightWall, frontWall);
+  moveFloorDown(): void {
+    if (this.activeFloorIndex > 0) {
+      this.activeFloorIndex--;
+      this.focusOnActiveFloor();
+    }
+  }
 
   private focusOnActiveFloor(): void {
     if (!this.floorsData[this.activeFloorIndex]) return;
@@ -277,82 +270,14 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     this.camera.position.set(120, 120, 120);
     this.controls.update();
 
-         // Door frame left
-         const dL = new THREE.Mesh(new THREE.BoxGeometry(1, 20, 3), metalMat);
-         dL.position.set(-15, 10, floorSize / 2);
+    this.deselectObject();
+  }
 
-         // Door frame right
-         const dR = new THREE.Mesh(new THREE.BoxGeometry(1, 20, 3), metalMat);
-         dR.position.set(15, 10, floorSize / 2);
+  // --- EDIT MODE & SPAWNING --- //
 
-         // Door header
-         const dT = new THREE.Mesh(new THREE.BoxGeometry(30, 2, 3), metalMat);
-         dT.position.set(0, 20, floorSize / 2);
-
-         group.add(dL, dR, dT);
-      }
-
-      group.visible = false;
-      this.scene.add(group);
-      return group;
-   }
-
-   private preRenderFloorPool(): void {
-      this.prefabs['basement'] = this.createFloorPrefab('basement');
-      this.prefabs['ground'] = this.createFloorPrefab('ground');
-      this.prefabs['upper'] = this.createFloorPrefab('upper');
-   }
-
-   private assembleFloors(floors: number, basement: boolean): void {
-      this.store.dispatch(generateMapAction({ numFloors: floors, hasBasement: basement }));
-   }
-
-   // --- NAVIGATION --- //
-
-   getActiveFloorName(): string {
-      return this.activeFloorName;
-   }
-
-   moveFloorUp(): void {
-      this.store.dispatch(moveFloorUpAction());
-   }
-
-   moveFloorDown(): void {
-      this.store.dispatch(moveFloorDownAction());
-   }
-
-   private focusOnActiveFloor(): void {
-      if (!this.storeState?.floorsData[this.storeState.activeFloorIndex]) return;
-
-      // Hide all prefabs
-      if (this.prefabs['basement']) this.prefabs['basement'].visible = false;
-      if (this.prefabs['ground']) this.prefabs['ground'].visible = false;
-      if (this.prefabs['upper']) this.prefabs['upper'].visible = false;
-
-      // Show correct prefab
-      if (this.storeState?.floorsData && this.storeState.activeFloorIndex !== undefined) {
-         const activeFloor = this.storeState.floorsData[this.storeState.activeFloorIndex];
-
-         if (activeFloor.level === -1 && this.prefabs['basement']) {
-            this.prefabs['basement'].visible = true;
-         } else if ((activeFloor.level === 0 || activeFloor.level === 1) && this.prefabs['ground']) { // Assuming 0 or 1 is ground floor based on math
-            this.prefabs['ground'].visible = true;
-         } else if (this.prefabs['upper']) {
-            this.prefabs['upper'].visible = true;
-         }
-
-         // Filter visible modular objects based on floor height
-         const activeFloorId = activeFloor.id;
-         this.modularObjects.forEach(obj => {
-            obj.visible = obj.userData['floorId'] === activeFloorId;
-         });
-      }
-
-      // Camera is fixed
-      this.controls.target.set(0, 0, 0);
-      this.camera.position.set(120, 120, 120);
-      this.controls.update();
-
+  toggleEditMode(): void {
+    this.editMode = !this.editMode;
+    if (!this.editMode) {
       this.deselectObject();
     }
     // Auto-rotation only when NOT in edit mode
@@ -365,7 +290,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     this.transformMode = mode;
     if (this.transformControl) {
       this.transformControl.setMode(mode);
-      // Show all axes for all modes — allow full freedom of movement
+      // Show all axes for all modes ΓÇö allow full freedom of movement
       this.transformControl.showX = true;
       this.transformControl.showY = true;
       this.transformControl.showZ = true;
@@ -640,7 +565,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
         this.modularObjects.push(newObject);
         this.refreshObjectLabel(newObject);
         
-        // Select immediately — no setTimeout needed, stays in Angular zone
+        // Select immediately ΓÇö no setTimeout needed, stays in Angular zone
         this.selectObject(newObject);
      }
   }
@@ -731,6 +656,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
          this.selectedObject.userData['name'] = this.selectedObjectName;
          this.refreshObjectLabel(this.selectedObject);
       }
+  }
 
   updateObjectColor(): void {
       if (this.selectedObject) {
@@ -753,11 +679,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
       }
   }
 
-         this.refreshObjectLabel(this.currentSelectedMesh);
-      }
-   }
-
-   private refreshObjectLabel(object: THREE.Object3D): void {
+  private refreshObjectLabel(object: THREE.Object3D): void {
       const oldLabel = object.children.find(c => c.userData['isLabel']);
       if (oldLabel) {
          object.remove(oldLabel);
@@ -771,7 +693,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
       label.position.set(0, height + 3, 0);
       label.userData['isLabel'] = true;
       object.add(label);
-   }
+  }
 
   private createTextSprite(message: string, color: string): THREE.Sprite {
     const canvas = document.createElement('canvas');
@@ -836,14 +758,14 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
       this.selectObject(clone);
   }
 
-   deleteSelected(): void {
-      if (!this.currentSelectedMesh) return;
-      this.scene.remove(this.currentSelectedMesh);
-      this.modularObjects = this.modularObjects.filter(o => o !== this.currentSelectedMesh);
+  deleteSelected(): void {
+      if (!this.selectedObject) return;
+      this.scene.remove(this.selectedObject);
+      this.modularObjects = this.modularObjects.filter(o => o !== this.selectedObject);
       this.deselectObject();
   }
 
-   // --- THREE JS SETUP --- //
+  // --- THREE JS SETUP --- //
 
   private initThreeJs(): void {
     const container = this.canvasContainer.nativeElement;
@@ -890,7 +812,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e293b, 0.3);
     this.scene.add(hemiLight);
 
-    // Orbit Controls — no angle restrictions for full 360° rotation
+    // Orbit Controls ΓÇö no angle restrictions for full 360┬░ rotation
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
@@ -906,16 +828,9 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
       this.isDraggingTransform = event.value as boolean;
     });
     
-    // No axis locking — allow free movement on all axes
+    // No axis locking ΓÇö allow free movement on all axes
 
-      // Add Transform Controls
-      this.transformControl = new TransformControls(this.camera, this.renderer.domElement);
-      this.transformControl.setTranslationSnap(5); // Snap to a 5-unit grid to easily align rows/columns
-      this.transformControl.setRotationSnap(THREE.MathUtils.degToRad(45));    // Listen to transform events to lock axes and set editing flag
-      this.transformControl.addEventListener('dragging-changed', (event) => {
-         this.controls.enabled = !(event.value as boolean);
-         this.isEditingTransform = event.value as boolean;
-      });
+    this.scene.add(this.transformControl.getHelper());
 
     // --- ALSO attach pointer listeners directly to the canvas element ---
     // This ensures events are captured even if they don't bubble to the container div
@@ -932,12 +847,18 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     this.animate();
   }
 
-      this.scene.add(this.transformControl.getHelper());
+  private onWindowResize(): void {
+    if (!this.camera || !this.renderer || !this.canvasContainer) return;
+    const container = this.canvasContainer.nativeElement;
+    this.camera.aspect = container.clientWidth / container.clientHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(container.clientWidth, container.clientHeight);
+  }
 
   private animate(): void {
     this.animationId = requestAnimationFrame(this.animate.bind(this));
     
-    // No scene rotation — OrbitControls.autoRotate handles the subtle camera movement
+    // No scene rotation ΓÇö OrbitControls.autoRotate handles the subtle camera movement
     if (this.controls) this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }

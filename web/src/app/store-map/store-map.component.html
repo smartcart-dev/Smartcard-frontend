@@ -1,44 +1,44 @@
-<div class="store-map-container">
+﻿<div class="store-map-container">
   <!-- Header -->
   <div class="header glass-panel">
     <div class="title-area">
-      <h1>✨ Store Architect 3D</h1>
+      <h1>Γ£¿ Store Architect 3D</h1>
       <p>Clean, fast, optimized multi-floor builder.</p>
     </div>
     <div class="header-actions">
       <button class="secondary-btn" (click)="toggleEditMode()">
-         <span *ngIf="!storeState?.editMode">✏️ Edit Mode</span>
-         <span *ngIf="storeState?.editMode">👁️ View Mode</span>
+        <span *ngIf="!editMode">Γ£Å∩╕Å Edit Mode</span>
+        <span *ngIf="editMode">≡ƒæü∩╕Å View Mode</span>
       </button>
       <button class="primary-btn pulse-glow" (click)="openSetupModal()">
-         ⚡ Generate
+         ΓÜí Generate
       </button>
     </div>
   </div>
 
   <!-- Map Area -->
-  <div class="layout-body" [class.editing]="storeState?.editMode">
+  <div class="layout-body" [class.editing]="editMode">
     
     <!-- Left Edit Toolbar -->
-    <div class="edit-toolbar glass-panel" *ngIf="storeState?.editMode">
+    <div class="edit-toolbar glass-panel" *ngIf="editMode">
       <div class="tool-section">
         <h3>Components</h3>
-        <button class="tool-btn" (click)="spawnObject('stairs')">🪜 Stairs</button>
-        <button class="tool-btn" (click)="spawnObject('block')">📦 Block</button>
-        <button class="tool-btn" (click)="spawnObject('wall')">🧱 Wall</button>
-        <button class="tool-btn" (click)="spawnObject('machine')">⚙️ Machine</button>
-        <button class="tool-btn" (click)="spawnObject('plant')">🪴 Plant</button>
+        <button class="tool-btn" (click)="spawnObject('stairs')">≡ƒ¬£ Stairs</button>
+        <button class="tool-btn" (click)="spawnObject('block')">≡ƒôª Block</button>
+        <button class="tool-btn" (click)="spawnObject('wall')">≡ƒº▒ Wall</button>
+        <button class="tool-btn" (click)="spawnObject('machine')">ΓÜÖ∩╕Å Machine</button>
+        <button class="tool-btn" (click)="spawnObject('plant')">≡ƒ¬┤ Plant</button>
       </div>
       <div class="tool-section mt-4">
         <h3>Controls</h3>
-        <button class="tool-btn" [class.active]="storeState?.transformMode === 'translate'" (click)="setTransformMode('translate')">☩ Move</button>
-        <button class="tool-btn" [class.active]="storeState?.transformMode === 'rotate'" (click)="setTransformMode('rotate')">↻ Rotate</button>
-        <button class="tool-btn" [class.active]="storeState?.transformMode === 'scale'" (click)="setTransformMode('scale')">⤢ Scale</button>
+        <button class="tool-btn" [class.active]="transformMode === 'translate'" (click)="setTransformMode('translate')">Γÿ⌐ Move</button>
+        <button class="tool-btn" [class.active]="transformMode === 'rotate'" (click)="setTransformMode('rotate')">Γå╗ Rotate</button>
+        <button class="tool-btn" [class.active]="transformMode === 'scale'" (click)="setTransformMode('scale')">Γñó Scale</button>
       </div>
 
       <!-- Selected Object Properties - uses [hidden] to avoid *ngIf issues -->
       <div class="tool-section mt-4 selected-props" [hidden]="!hasSelection">
-        <h3>🎯 Selected Object</h3>
+        <h3>≡ƒÄ» Selected Object</h3>
         <div class="prop-group">
           <label for="objNameInput">Name</label>
           <input id="objNameInput" type="text" class="prop-input" [(ngModel)]="selectedObjectName" (change)="updateObjectName()" placeholder="e.g. Clothing, Bakery">
@@ -48,8 +48,8 @@
           <input id="objColorInput" type="color" class="prop-color" [(ngModel)]="selectedObjectColor" (input)="updateObjectColor()">
         </div>
         <div class="prop-actions">
-          <button class="tool-btn" (click)="duplicateSelected()">📋 Duplicate</button>
-          <button class="tool-btn delete-btn" (click)="deleteSelected()">🗑️ Delete</button>
+          <button class="tool-btn" (click)="duplicateSelected()">≡ƒôï Duplicate</button>
+          <button class="tool-btn delete-btn" (click)="deleteSelected()">≡ƒùæ∩╕Å Delete</button>
         </div>
       </div>
     </div>
@@ -62,8 +62,8 @@
       <div class="modal-overlay premium-modal" *ngIf="showSetupModal">
         <div class="modal-content glass-panel">
           <div class="modal-header">
-             <h2>✨ Initialize Map</h2>
-             <button class="close-btn" (click)="closeSetupModal()" [disabled]="isProcessing">✕</button>
+             <h2>Γ£¿ Initialize Map</h2>
+             <button class="close-btn" (click)="closeSetupModal()" [disabled]="isProcessing">Γ£ò</button>
           </div>
           
           <ng-container *ngIf="!isProcessing; else processingView">
@@ -80,7 +80,7 @@
             </div>
             <div class="modal-actions mt-4">
               <button class="btn-cancel" (click)="closeSetupModal()">Cancel</button>
-              <button class="btn-submit pulse-glow" (click)="generateMap()">🚀 Build Fast</button>
+              <button class="btn-submit pulse-glow" (click)="generateMap()">≡ƒÜÇ Build Fast</button>
             </div>
           </ng-container>
 
@@ -94,15 +94,15 @@
       </div>
 
       <!-- Floor Navigation Controls -->
-      <div class="floor-nav-panel glass-panel" *ngIf="storeState && storeState.floorsData.length > 1 && !showSetupModal">
-        <button class="nav-btn" [disabled]="storeState.activeFloorIndex === storeState.floorsData.length - 1" (click)="moveFloorUp()">
-          ▲<br><small>UP</small>
+      <div class="floor-nav-panel glass-panel" *ngIf="totalLevels > 1 && !showSetupModal">
+        <button class="nav-btn" [disabled]="activeFloorIndex === totalLevels - 1" (click)="moveFloorUp()">
+          Γû▓<br><small>UP</small>
         </button>
         <div class="floor-indicator">
           <span class="level-name">{{ getActiveFloorName() }}</span>
         </div>
-        <button class="nav-btn" [disabled]="storeState.activeFloorIndex === 0" (click)="moveFloorDown()">
-          ▼<br><small>DN</small>
+        <button class="nav-btn" [disabled]="activeFloorIndex === 0" (click)="moveFloorDown()">
+          Γû╝<br><small>DN</small>
         </button>
       </div>
     </div>
