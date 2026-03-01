@@ -7,8 +7,8 @@
     </div>
     <div class="header-actions">
       <button class="secondary-btn" (click)="toggleEditMode()">
-        <span *ngIf="!editMode">✏️ Edit Mode</span>
-        <span *ngIf="editMode">👁️ View Mode</span>
+         <span *ngIf="!storeState?.editMode">✏️ Edit Mode</span>
+         <span *ngIf="storeState?.editMode">👁️ View Mode</span>
       </button>
       <button class="primary-btn pulse-glow" (click)="openSetupModal()">
          ⚡ Generate
@@ -17,10 +17,10 @@
   </div>
 
   <!-- Map Area -->
-  <div class="layout-body" [class.editing]="editMode">
+  <div class="layout-body" [class.editing]="storeState?.editMode">
     
     <!-- Left Edit Toolbar -->
-    <div class="edit-toolbar glass-panel" *ngIf="editMode">
+    <div class="edit-toolbar glass-panel" *ngIf="storeState?.editMode">
       <div class="tool-section">
         <h3>Components</h3>
         <button class="tool-btn" (click)="spawnObject('stairs')">🪜 Stairs</button>
@@ -31,9 +31,9 @@
       </div>
       <div class="tool-section mt-4">
         <h3>Controls</h3>
-        <button class="tool-btn" [class.active]="transformMode === 'translate'" (click)="setTransformMode('translate')">☩ Move</button>
-        <button class="tool-btn" [class.active]="transformMode === 'rotate'" (click)="setTransformMode('rotate')">↻ Rotate</button>
-        <button class="tool-btn" [class.active]="transformMode === 'scale'" (click)="setTransformMode('scale')">⤢ Scale</button>
+        <button class="tool-btn" [class.active]="storeState?.transformMode === 'translate'" (click)="setTransformMode('translate')">☩ Move</button>
+        <button class="tool-btn" [class.active]="storeState?.transformMode === 'rotate'" (click)="setTransformMode('rotate')">↻ Rotate</button>
+        <button class="tool-btn" [class.active]="storeState?.transformMode === 'scale'" (click)="setTransformMode('scale')">⤢ Scale</button>
       </div>
 
       <!-- Selected Object Properties - uses [hidden] to avoid *ngIf issues -->
@@ -94,14 +94,14 @@
       </div>
 
       <!-- Floor Navigation Controls -->
-      <div class="floor-nav-panel glass-panel" *ngIf="totalLevels > 1 && !showSetupModal">
-        <button class="nav-btn" [disabled]="activeFloorIndex === totalLevels - 1" (click)="moveFloorUp()">
+      <div class="floor-nav-panel glass-panel" *ngIf="storeState && storeState.floorsData.length > 1 && !showSetupModal">
+        <button class="nav-btn" [disabled]="storeState.activeFloorIndex === storeState.floorsData.length - 1" (click)="moveFloorUp()">
           ▲<br><small>UP</small>
         </button>
         <div class="floor-indicator">
           <span class="level-name">{{ getActiveFloorName() }}</span>
         </div>
-        <button class="nav-btn" [disabled]="activeFloorIndex === 0" (click)="moveFloorDown()">
+        <button class="nav-btn" [disabled]="storeState.activeFloorIndex === 0" (click)="moveFloorDown()">
           ▼<br><small>DN</small>
         </button>
       </div>
