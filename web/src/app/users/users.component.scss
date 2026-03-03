@@ -9,19 +9,55 @@
 
   .header {
     margin-bottom: 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 
-    h1 {
-      font-size: 32px;
-      font-weight: 800;
-      color: #1e293b;
-      margin: 0 0 8px 0;
-      letter-spacing: -0.025em;
+    .title-section {
+      h1 {
+        font-size: 32px;
+        font-weight: 800;
+        color: #1e293b;
+        margin: 0 0 8px 0;
+        letter-spacing: -0.025em;
+      }
+
+      p {
+        color: #64748b;
+        margin: 0;
+        font-size: 18px;
+      }
     }
 
-    p {
-      color: #64748b;
-      margin: 0;
-      font-size: 18px;
+    .add-user-btn {
+      background: #6366f1;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3);
+
+      span {
+        font-size: 20px;
+        line-height: 1;
+      }
+
+      &:hover {
+        background: #4f46e5;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
     }
   }
 }

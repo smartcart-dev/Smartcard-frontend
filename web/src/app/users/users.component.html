@@ -1,7 +1,12 @@
 <div class="users-container">
     <div class="header">
-        <h1>Users Management</h1>
-        <p>View and manage all registered users in the system.</p>
+        <div class="title-section">
+            <h1>Users Management</h1>
+            <p>View and manage all registered users in the system.</p>
+        </div>
+        <button class="add-user-btn" (click)="navigateToAddUser()">
+            <span>+</span> Add User
+        </button>
     </div>
 
     <div class="users-card">

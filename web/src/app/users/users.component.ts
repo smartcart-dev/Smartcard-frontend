@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ApiService } from '../services/apiService.service';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
+import { Router } from '@angular/router';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -16,6 +17,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 export class UsersComponent implements OnInit {
     private apiService = inject(ApiService);
     private cdr = inject(ChangeDetectorRef);
+    private router = inject(Router);
 
     users: any[] = [];
     loading = true;
@@ -93,5 +95,9 @@ export class UsersComponent implements OnInit {
                 this.cdr.detectChanges();
             }
         });
+    }
+
+    navigateToAddUser(): void {
+        this.router.navigate(['/app/users/add']);
     }
 }

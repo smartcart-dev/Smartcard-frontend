@@ -8,6 +8,7 @@ export const appRoutes: Route[] = [
     children: [
       { path: 'dashboard', loadComponent: () => import('./dashboard/dashboard.component').then(m => m.DashboardComponent) },
       { path: 'users', loadComponent: () => import('./users/users.component').then(m => m.UsersComponent) },
+      { path: 'users/add', loadComponent: () => import('./users/add-user/add-user.component').then(m => m.AddUserComponent) },
       { path: 'store-map', loadComponent: () => import('./store-map/store-map.component').then(m => m.StoreMapComponent) },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
     ]
