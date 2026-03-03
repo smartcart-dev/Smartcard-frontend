@@ -32,7 +32,9 @@ export class ApiService {
             });
         }
 
-        return this.http.get<T>(`${this.baseUrl}${endpoint}`, {
+        const fullUrl = `${this.baseUrl}${endpoint}`;
+        console.log(`[ApiService] GET request to: ${fullUrl}`);
+        return this.http.get<T>(fullUrl, {
             headers: this.createHeaders(),
             params: httpParams
         }).pipe(
