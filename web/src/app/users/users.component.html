@@ -1,0 +1,34 @@
+<div class="users-container">
+    <div class="header">
+        <h1>Users Management</h1>
+        <p>View and manage all registered users in the system.</p>
+    </div>
+
+    <div class="users-card">
+        <div *ngIf="loading" class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading users...</p>
+        </div>
+
+        <div *ngIf="error" class="error-state">
+            <p class="error-message">{{ error }}</p>
+            <button (click)="fetchUsers()" class="retry-btn">Retry</button>
+        </div>
+
+        <div *ngIf="!loading && !error">
+            <div class="grid-container" *ngIf="users.length > 0; else noUsers">
+                <ag-grid-angular style="width: 100%; height: 100%;" class="ag-theme-quartz" [rowData]="users"
+                    [columnDefs]="columnDefs" [defaultColDef]="defaultColDef" [pagination]="true"
+                    [paginationPageSize]="paginationPageSize" [paginationPageSizeSelector]="paginationPageSizeSelector"
+                    [domLayout]="'normal'" [rowHeight]="56" [headerHeight]="48">
+                </ag-grid-angular>
+            </div>
+
+            <ng-template #noUsers>
+                <div class="empty-state">
+                    <p>No users found.</p>
+                </div>
+            </ng-template>
+        </div>
+    </div>
+</div>

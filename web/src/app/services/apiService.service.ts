@@ -23,7 +23,7 @@ export class ApiService {
 
     get<T>(endpoint: string, params?: any): Observable<T> {
         let httpParams = new HttpParams();
-
+        // ... (existing param logic)
         if (params) {
             Object.keys(params).forEach(key => {
                 if (params[key] !== null && params[key] !== undefined) {
@@ -33,7 +33,6 @@ export class ApiService {
         }
 
         const fullUrl = `${this.baseUrl}${endpoint}`;
-        console.log(`[ApiService] GET request to: ${fullUrl}`);
         return this.http.get<T>(fullUrl, {
             headers: this.createHeaders(),
             params: httpParams

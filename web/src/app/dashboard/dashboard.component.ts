@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { ApiService } from '../services/apiService.service';
 
 @Component({
@@ -12,6 +13,7 @@ import { ApiService } from '../services/apiService.service';
 export class DashboardComponent implements OnInit {
   private apiService = inject(ApiService);
   private cdr = inject(ChangeDetectorRef);
+  private router = inject(Router);
   activeUsersCount = 0;
 
   ngOnInit(): void {
@@ -25,9 +27,13 @@ export class DashboardComponent implements OnInit {
         this.cdr.detectChanges();
       },
       error: (error) => {
-        console.error('[DashboardComponent] Error fetching active users count:', error);
+        // Error handled silently
       }
     });
+  }
+
+  navigateToUsers(): void {
+    this.router.navigate(['/app/users']);
   }
 }
 
