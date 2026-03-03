@@ -1,9 +1,26 @@
-﻿import { Component, ElementRef, ViewChild, AfterViewInit, OnDestroy, ChangeDetectorRef, inject, NgZone } from '@angular/core';
+﻿import {
+  Component, ElementRef, ViewChild, AfterViewInit,
+  OnDestroy, ChangeDetectorRef, inject, NgZone
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { MapSection, MapFloor, StoreMapConfig, SectionPreset, SECTION_PRESETS, WizardFloorSetup } from './store-config.interface';
+
+const BADGES = ['', '', '', '30% OFF', '', 'HOT', '', '', 'NEW', '50% OFF', '', ''];
+const MOCK_PRODUCTS: Record<string, string[]> = {
+  grocery:     ['🍎 Fresh Apples','🥕 Carrots','🥛 Full-Cream Milk','🍞 Whole-Wheat Bread','🥚 Farm Eggs','🍌 Bananas'],
+  clothing:    ['👕 Cotton T-Shirts','👖 Slim Jeans','🧥 Winter Jackets','👗 Summer Dresses','🧣 Scarves'],
+  electronics: ['📱 Smartphones','💻 Laptops','📷 DSLRs','🎧 ANC Headphones','📺 Smart TVs'],
+  billing:     ['💳 Card / UPI','💵 Cash Counter','🧾 Self-Checkout'],
+  footwear:    ['👟 Sports Shoes','👞 Formal Shoes','👡 Heels','🥿 Flats','🥾 Boots'],
+  home:        ['🍳 Non-Stick Cookware','🏠 Home Décor','🪑 Furniture','🛁 Bathroom Accessories'],
+  offers:      ['🏷️ Flash Deals','🎁 Gift Cards','🔖 Seasonal Offers','🎯 Bundle Packs'],
+  bakery:      ['🥐 Croissants','🎂 Custom Cakes','🥖 Sourdough','🍪 Cookies','🧁 Cupcakes'],
+  dairy:       ['🧀 Cheese Varieties','🥛 Fresh Milk','🧈 Butter','🍦 Ice Cream'],
+  pharmacy:    ['💊 Medicines','🩺 First-Aid','💆 Vitamins & Supplements'],
+  sports:      ['⚽ Football','🏏 Cricket Gear','🎾 Tennis','🏊 Swimming','🏋️ Fitness'],
+  entrance:    ['🛒 Shopping Carts','🗺️ Store Map','ℹ️ Information Desk','🎫 Loyalty Cards'],
+};
 
 @Component({
   selector: 'app-store-map',
@@ -13,853 +30,589 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
   styleUrl: './store-map.component.scss',
 })
 export class StoreMapComponent implements AfterViewInit, OnDestroy {
-  @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('mapCanvas')   canvasRef!:  ElementRef<HTMLCanvasElement>;
+  @ViewChild('canvasWrapper') wrapperRef!: ElementRef<HTMLDivElement>;
 
-  // UI State
-  showSetupModal = false;
-  isProcessing = false;
-  numFloors = 1;
-  hasBasement = false;
-  editMode = false;
-  transformMode: 'translate' | 'rotate' | 'scale' = 'translate';
-  
-  // Selection State
-  hasSelection = false;
-  selectedObject: THREE.Object3D | null = null;
-  selectedObjectName = '';
-  selectedObjectColor = '#ffffff';
-  selectedObjectType = '';
+  private cdr     = inject(ChangeDetectorRef);
+  private ngZone  = inject(NgZone);
 
-  // Floor Navigation State
-  activeFloorIndex = 0;
-  totalLevels = 1;
-  floorsData: { id: string, name: string, level: number }[] = [];
+  // ── Wizard ──────────────────────────────────────────────
+  wizardActive = true; wizardStep: 1|2 = 1; currentWizardFloor = 0;
+  storeName = 'Smart Bazaar'; numFloors = 2; allPresets = SECTION_PRESETS;
+  wizardFloors: WizardFloorSetup[] = [
+    { name: 'Ground Floor', selectedTypes: new Set(['entrance','grocery','clothing','billing','offers']) },
+    { name: 'Floor 1',      selectedTypes: new Set(['footwear','electronics','home','pharmacy']) },
+  ];
 
-  // Pre-rendered Floor Cache (3 Types)
-  private prefabs: {
-     basement: THREE.Group | null,
-     ground: THREE.Group | null,
-     upper: THREE.Group | null
-  } = { basement: null, ground: null, upper: null };
-  
-  // Three.js instances
-  private scene!: THREE.Scene;
-  private camera!: THREE.PerspectiveCamera;
-  private renderer!: THREE.WebGLRenderer;
-  private controls!: OrbitControls;
-  private transformControl!: TransformControls;
-  private raycaster = new THREE.Raycaster();
-  private mouse = new THREE.Vector2();
-  private animationId: number | null = null;
-  private isDraggingTransform = false;
-  private modularObjects: THREE.Object3D[] = [];
-  private floorMeshes: THREE.Mesh[] = [];
+  // ── Map State ────────────────────────────────────────────
+  config: StoreMapConfig | null = null;
+  activeFloorIndex = 0; selectedSectionId: string|null = null;
+  hoveredSectionId: string|null = null; editMode = false; showAddSectionPanel = false;
 
-  // Pointer tracking for click vs drag detection
-  private pointerDownPos = { x: 0, y: 0 };
-  private pointerDownTime = 0;
+  // ── Zoom / Pan ───────────────────────────────────────────
+  zoom = 1.0; private panX = 0; private panY = 0;
+  private isPanning = false; private panStartX = 0; private panStartY = 0;
 
-  private cdr = inject(ChangeDetectorRef);
-  private ngZone = inject(NgZone);
+  // ── Navigation ───────────────────────────────────────────
+  searchQuery = ''; searchResult: MapSection|null = null; navigationActive = false;
 
+  // ── Canvas internals ────────────────────────────────────
+  private canvas!: HTMLCanvasElement; private ctx!: CanvasRenderingContext2D;
+  private animFrame: number|null = null; private dpr = 1; private canvasW = 800; private canvasH = 550;
+  private pathOffset = 0; private pulsePhase = 0; private lastTime = 0; private boundResize!: ()=>void;
+
+  // ── Drag ─────────────────────────────────────────────────
+  private isDragging = false; private dragSectionId: string|null = null;
+  private dragStartX = 0; private dragStartY = 0; private dragOrigX = 0; private dragOrigY = 0;
+  private mouseDownX = 0; private mouseDownY = 0;
+
+  // ── Accessors ────────────────────────────────────────────
+  get activeFloor():    MapFloor|null   { return this.config?.floors[this.activeFloorIndex] ?? null; }
+  get activeSections(): MapSection[]    { return this.activeFloor?.sections ?? []; }
+  get selectedSection():MapSection|null { return this.activeSections.find(s=>s.id===this.selectedSectionId)??null; }
+  get cwfs():           WizardFloorSetup{ return this.wizardFloors[this.currentWizardFloor]; }
+  get mockProducts():   string[]        { return this.selectedSection ? (MOCK_PRODUCTS[this.selectedSection.type]??[]) : []; }
+
+  // ── Lifecycle ─────────────────────────────────────────────
   ngAfterViewInit(): void {
-    this.initThreeJs();
-    this.preRenderFloorPool();
-    this.onWindowResize = this.onWindowResize.bind(this);
-    window.addEventListener('resize', this.onWindowResize);
-    
-    // Build initial default floor
-    this.assembleFloors(1, false);
+    this.boundResize = ()=>this.resizeCanvas();
+    window.addEventListener('resize', this.boundResize);
   }
-
   ngOnDestroy(): void {
-    if (this.animationId !== null) cancelAnimationFrame(this.animationId);
-    window.removeEventListener('resize', this.onWindowResize);
-    this.renderer?.dispose();
-    this.scene?.clear();
+    if (this.animFrame) cancelAnimationFrame(this.animFrame);
+    window.removeEventListener('resize', this.boundResize);
   }
 
-  openSetupModal(): void {
-    this.showSetupModal = true;
-  }
-
-  closeSetupModal(): void {
-    if (!this.isProcessing) {
-      this.showSetupModal = false;
+  // ── Wizard Logic ─────────────────────────────────────────
+  updateFloorCount(): void {
+    const n = Math.max(1,Math.min(5, this.numFloors));
+    while (this.wizardFloors.length < n) {
+      const l = this.wizardFloors.length;
+      this.wizardFloors.push({ name: l===0?'Ground Floor':`Floor ${l}`, selectedTypes: new Set(['grocery','clothing']) });
     }
+    this.wizardFloors = this.wizardFloors.slice(0, n);
   }
+  goToStep2():  void { if (!this.storeName.trim()) return; this.updateFloorCount(); this.currentWizardFloor=0; this.wizardStep=2; }
+  togglePreset(t: string): void { const s=this.cwfs.selectedTypes; if(s.has(t)){if(s.size>1)s.delete(t);}else{s.add(t);} }
+  isPresetSelected(t: string): boolean { return this.cwfs.selectedTypes.has(t); }
+  wizardPrev(): void { if(this.currentWizardFloor>0) this.currentWizardFloor--; else this.wizardStep=1; }
+  wizardNext(): void { if(this.currentWizardFloor<this.wizardFloors.length-1) this.currentWizardFloor++; else this.generateMap(); }
+  isLastWizardFloor(): boolean { return this.currentWizardFloor===this.wizardFloors.length-1; }
 
   generateMap(): void {
-    if (this.numFloors < 1) return;
-    
-    this.floorsData = [];
-    this.totalLevels = this.hasBasement ? this.numFloors + 1 : this.numFloors;
-    this.activeFloorIndex = this.hasBasement ? 1 : 0;
-
-    for (let i = 0; i < this.totalLevels; i++) {
-       const isBasement = this.hasBasement && i === 0;
-       const levelNumber = isBasement ? -1 : (this.hasBasement ? i : i + 1);
-       
-       this.floorsData.push({
-          id: `floor-${levelNumber}`,
-          name: isBasement ? 'Basement' : (levelNumber === 0 ? 'Ground Floor' : `Floor ${levelNumber}`),
-          level: levelNumber
-       });
-    }
-
-    this.focusOnActiveFloor();
-    this.closeSetupModal();
+    const floors: MapFloor[] = this.wizardFloors.map((setup,idx)=>({
+      id:`floor-${idx}`, name:setup.name, level:idx,
+      sections: this.autoLayout(SECTION_PRESETS.filter(p=>setup.selectedTypes.has(p.type))),
+    }));
+    this.config = { storeName: this.storeName, floors };
+    this.activeFloorIndex = 0; this.wizardActive = false;
+    setTimeout(()=>this.initCanvas(), 60);
   }
 
-  private createFloorPrefab(type: 'basement' | 'ground' | 'upper'): THREE.Group {
-     const group = new THREE.Group();
-     
-     const floorSize = 150;
-     const wallHeight = 40;
-     const wallThickness = 2;
-
-     // Floor surface
-     const floorGeo = new THREE.PlaneGeometry(floorSize, floorSize);
-     const floorMat = new THREE.MeshStandardMaterial({ 
-       color: type === 'basement' ? '#94a3b8' : '#e2e8f0', 
-       roughness: 0.4,
-       metalness: 0.05,
-       side: THREE.DoubleSide
-     });
-     
-     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-     floorMesh.rotation.x = -Math.PI / 2;
-     floorMesh.receiveShadow = true;
-     group.add(floorMesh);
-     
-     // Floor grid
-     const gridColor = type === 'basement' ? '#475569' : '#94a3b8';
-     const grid = new THREE.GridHelper(floorSize, 30, gridColor, gridColor);
-     grid.position.y = 0.05;
-     (grid.material as THREE.Material).opacity = 0.4;
-     (grid.material as THREE.Material).transparent = true;
-     group.add(grid);
-
-     // --- Walls ---
-     const solidWallMat = new THREE.MeshStandardMaterial({ color: '#f1f5f9', roughness: 0.7, metalness: 0.05 });
-     const glassWallMat = new THREE.MeshPhysicalMaterial({ 
-        color: '#bfdbfe', metalness: 0.1, roughness: 0.05,
-        transmission: 0.85, transparent: true, opacity: 0.35,
-        thickness: 0.5, ior: 1.5
-     });
-
-     const wallGeoX = new THREE.BoxGeometry(floorSize, wallHeight, wallThickness);
-     const wallGeoZ = new THREE.BoxGeometry(wallThickness, wallHeight, floorSize);
-
-     // Back Wall
-     const backWall = new THREE.Mesh(wallGeoX, solidWallMat);
-     backWall.position.set(0, wallHeight / 2, -floorSize / 2);
-     backWall.receiveShadow = true; backWall.castShadow = true;
-
-     // Left Wall
-     const leftWall = new THREE.Mesh(wallGeoZ, solidWallMat);
-     leftWall.position.set(-floorSize / 2, wallHeight / 2, 0);
-     leftWall.receiveShadow = true; leftWall.castShadow = true;
-
-     // Right Wall
-     const rightWall = new THREE.Mesh(wallGeoZ, solidWallMat);
-     rightWall.position.set(floorSize / 2, wallHeight / 2, 0);
-     rightWall.receiveShadow = true; rightWall.castShadow = true;
-
-     // Front Wall (Glass for ground floor)
-     const frontWall = new THREE.Mesh(wallGeoX, type === 'ground' ? glassWallMat : solidWallMat);
-     frontWall.position.set(0, wallHeight / 2, floorSize / 2);
-     if (type !== 'ground') { frontWall.receiveShadow = true; frontWall.castShadow = true; }
-
-     group.add(backWall, leftWall, rightWall, frontWall);
-
-     if (type === 'ground') {
-        const metalMat = new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.9, roughness: 0.15 });
-        
-        // Door frame
-        const dL = new THREE.Mesh(new THREE.BoxGeometry(1, 20, 3), metalMat);
-        dL.position.set(-15, 10, floorSize / 2);
-        const dR = new THREE.Mesh(new THREE.BoxGeometry(1, 20, 3), metalMat);
-        dR.position.set(15, 10, floorSize / 2);
-        const dT = new THREE.Mesh(new THREE.BoxGeometry(30, 2, 3), metalMat);
-        dT.position.set(0, 20, floorSize / 2);
-
-        group.add(dL, dR, dT);
-     }
-
-     group.visible = false;
-     this.scene.add(group);
-     return group;
-  }
-
-  private preRenderFloorPool(): void {
-    this.prefabs.basement = this.createFloorPrefab('basement');
-    this.prefabs.ground = this.createFloorPrefab('ground');
-    this.prefabs.upper = this.createFloorPrefab('upper');
-  }
-
-  private assembleFloors(floors: number, basement: boolean): void {
-    this.floorsData = [];
-    this.totalLevels = basement ? floors + 1 : floors;
-    this.activeFloorIndex = basement ? 1 : 0;
-
-    for (let i = 0; i < this.totalLevels; i++) {
-       const isBasement = basement && i === 0;
-       const levelNumber = isBasement ? -1 : (basement ? i : i + 1);
-       
-       this.floorsData.push({
-          id: `floor-${levelNumber}`,
-          name: isBasement ? 'Basement' : (levelNumber === 0 ? 'Ground Floor' : `Floor ${levelNumber}`),
-          level: levelNumber
-       });
-    }
-
-    this.focusOnActiveFloor();
-  }
-
-  // --- NAVIGATION --- //
-
-  getActiveFloorName(): string {
-    if (this.floorsData[this.activeFloorIndex]) {
-       return this.floorsData[this.activeFloorIndex].name;
-    }
-    return '';
-  }
-
-  moveFloorUp(): void {
-    if (this.activeFloorIndex < this.totalLevels - 1) {
-      this.activeFloorIndex++;
-      this.focusOnActiveFloor();
-    }
-  }
-
-  moveFloorDown(): void {
-    if (this.activeFloorIndex > 0) {
-      this.activeFloorIndex--;
-      this.focusOnActiveFloor();
-    }
-  }
-
-  private focusOnActiveFloor(): void {
-    if (!this.floorsData[this.activeFloorIndex]) return;
-    
-    // Hide all prefabs
-    if (this.prefabs.basement) this.prefabs.basement.visible = false;
-    if (this.prefabs.ground) this.prefabs.ground.visible = false;
-    if (this.prefabs.upper) this.prefabs.upper.visible = false;
-    
-    // Show correct prefab
-    const activeFloor = this.floorsData[this.activeFloorIndex];
-    
-    if (activeFloor.level === -1 && this.prefabs.basement) {
-       this.prefabs.basement.visible = true;
-    } else if ((activeFloor.level === 0 || activeFloor.level === 1) && this.prefabs.ground) {
-       this.prefabs.ground.visible = true;
-    } else if (this.prefabs.upper) {
-       this.prefabs.upper.visible = true;
-    }
-    
-    // Filter visible modular objects based on floor
-    const activeFloorId = activeFloor.id;
-    this.modularObjects.forEach(obj => {
-       obj.visible = obj.userData['floorId'] === activeFloorId;
-    });
-    
-    // Camera position
-    this.controls.target.set(0, 0, 0);
-    this.camera.position.set(120, 120, 120);
-    this.controls.update();
-
-    this.deselectObject();
-  }
-
-  // --- EDIT MODE & SPAWNING --- //
-
-  toggleEditMode(): void {
-    this.editMode = !this.editMode;
-    if (!this.editMode) {
-      this.deselectObject();
-    }
-    // Auto-rotation only when NOT in edit mode
-    if (this.controls) {
-      this.controls.autoRotate = !this.editMode;
-    }
-  }
-
-  setTransformMode(mode: 'translate' | 'rotate' | 'scale'): void {
-    this.transformMode = mode;
-    if (this.transformControl) {
-      this.transformControl.setMode(mode);
-      // Show all axes for all modes ΓÇö allow full freedom of movement
-      this.transformControl.showX = true;
-      this.transformControl.showY = true;
-      this.transformControl.showZ = true;
-    }
-  }
-
-  // --- MINI STORE SECTION BUILDER --- //
-  private createMiniStore(width: number, height: number, depth: number, color: string, name: string): THREE.Group {
-    const group = new THREE.Group();
-
-    // --- Colored floor slab ---
-    const floorMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 });
-    floorMat.userData = { colorable: true };
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(width, 0.4, depth), floorMat);
-    floor.position.y = 0.2;
-    floor.receiveShadow = true;
-    floor.userData['colorable'] = true;
-    group.add(floor);
-
-    // --- Low side walls (half height) ---
-    const wallMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.6, metalness: 0.05 });
-    const sideWallHeight = height * 0.5;
-    
-    // Left wall
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, sideWallHeight, depth), wallMat);
-    leftWall.position.set(-width / 2, sideWallHeight / 2 + 0.4, 0);
-    leftWall.castShadow = true;
-    group.add(leftWall);
-    
-    // Right wall
-    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, sideWallHeight, depth), wallMat);
-    rightWall.position.set(width / 2, sideWallHeight / 2 + 0.4, 0);
-    rightWall.castShadow = true;
-    group.add(rightWall);
-
-    // --- Back wall (full height) ---
-    const backWallMat = new THREE.MeshStandardMaterial({ color: '#f1f5f9', roughness: 0.5 });
-    const backWall = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.4), backWallMat);
-    backWall.position.set(0, height / 2 + 0.4, -depth / 2);
-    backWall.castShadow = true;
-    backWall.receiveShadow = true;
-    group.add(backWall);
-
-    // --- Counter / display shelf at front ---
-    const counterMat = new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.3, metalness: 0.3 });
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(width - 1, 2.5, 1.5), counterMat);
-    counter.position.set(0, 1.65, depth / 2 - 1);
-    counter.castShadow = true;
-    group.add(counter);
-
-    // --- SIGNBOARD above the front ---
-    const signHeight = 3;
-    const signY = height + 0.4;
-    
-    // Signboard backing (colored)
-    const signMat = new THREE.MeshStandardMaterial({ 
-      color: color, roughness: 0.3, metalness: 0.2,
-      emissive: color, emissiveIntensity: 0.15
-    });
-    const signboard = new THREE.Mesh(new THREE.BoxGeometry(width + 1, signHeight, 0.5), signMat);
-    signboard.position.set(0, signY + signHeight / 2, depth / 2 + 0.3);
-    signboard.castShadow = true;
-    signboard.userData['colorable'] = true;
-    group.add(signboard);
-
-    // Sign support posts
-    const postMat = new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.8, roughness: 0.2 });
-    const postLeft = new THREE.Mesh(new THREE.BoxGeometry(0.3, signHeight + 2, 0.3), postMat);
-    postLeft.position.set(-width / 2, signY, depth / 2 + 0.3);
-    group.add(postLeft);
-    const postRight = new THREE.Mesh(new THREE.BoxGeometry(0.3, signHeight + 2, 0.3), postMat);
-    postRight.position.set(width / 2, signY, depth / 2 + 0.3);
-    group.add(postRight);
-
-    // --- Small awning above entrance ---
-    const awningMat = new THREE.MeshStandardMaterial({ 
-      color: color, roughness: 0.5, side: THREE.DoubleSide 
-    });
-    const awning = new THREE.Mesh(new THREE.BoxGeometry(width + 1, 0.2, 3), awningMat);
-    awning.position.set(0, height + 0.3, depth / 2 + 1.5);
-    awning.userData['colorable'] = true;
-    group.add(awning);
-
-    // --- Interior accent strip on floor (colored line) ---
-    const accentMat = new THREE.MeshStandardMaterial({ 
-      color: color, emissive: color, emissiveIntensity: 0.4 
-    });
-    const accent = new THREE.Mesh(new THREE.BoxGeometry(width - 2, 0.05, depth - 2), accentMat);
-    accent.position.y = 0.42;
-    accent.userData['colorable'] = true;
-    group.add(accent);
-
-    return group;
-  }
-
-  private createRealisticWall(length: number, height: number): THREE.Group {
-    const group = new THREE.Group();
-    const wallMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.6, metalness: 0.05 });
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(length, height, 1.5), wallMat);
-    wall.position.y = height / 2;
-    wall.castShadow = true;
-    wall.receiveShadow = true;
-    group.add(wall);
-
-    // Top cap
-    const capMat = new THREE.MeshStandardMaterial({ color: '#94a3b8', metalness: 0.5, roughness: 0.3 });
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(length + 0.5, 0.5, 2), capMat);
-    cap.position.y = height;
-    group.add(cap);
-
-    return group;
-  }
-
-  private createRealisticStairs(): THREE.Group {
-    const group = new THREE.Group();
-    const stepMat = new THREE.MeshStandardMaterial({ color: '#64748b', roughness: 0.4, metalness: 0.3 });
-    const railMat = new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.8, roughness: 0.2 });
-
-    const numSteps = 10;
-    const stepWidth = 12;
-    const stepHeight = 2.5;
-    const stepDepth = 3;
-
-    for (let i = 0; i < numSteps; i++) {
-      const step = new THREE.Mesh(new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth), stepMat);
-      step.position.set(0, i * stepHeight + stepHeight / 2, i * stepDepth);
-      step.castShadow = true;
-      step.receiveShadow = true;
-      group.add(step);
-    }
-
-    // Side rails
-    const railHeight = numSteps * stepHeight + 5;
-    const railGeo = new THREE.BoxGeometry(0.5, railHeight, 0.5);
-    const leftRail = new THREE.Mesh(railGeo, railMat);
-    leftRail.position.set(-stepWidth / 2, railHeight / 2, (numSteps * stepDepth) / 2);
-    leftRail.castShadow = true;
-    group.add(leftRail);
-    
-    const rightRail = new THREE.Mesh(railGeo, railMat);
-    rightRail.position.set(stepWidth / 2, railHeight / 2, (numSteps * stepDepth) / 2);
-    rightRail.castShadow = true;
-    group.add(rightRail);
-
-    // Handrails
-    const handrailGeo = new THREE.CylinderGeometry(0.3, 0.3, stepWidth + 1, 8);
-    const handrail = new THREE.Mesh(handrailGeo, railMat);
-    handrail.rotation.z = Math.PI / 2;
-    handrail.position.set(0, railHeight, (numSteps * stepDepth) / 2);
-    group.add(handrail);
-
-    return group;
-  }
-
-  private createRealisticMachine(): THREE.Group {
-    const group = new THREE.Group();
-    
-    // Body
-    const bodyMat = new THREE.MeshStandardMaterial({ color: '#475569', metalness: 0.7, roughness: 0.25 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(6, 12, 5), bodyMat);
-    body.position.y = 6;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    group.add(body);
-
-    // Screen
-    const screenMat = new THREE.MeshStandardMaterial({ 
-      color: '#0ea5e9', emissive: '#0ea5e9', emissiveIntensity: 0.4 
-    });
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(4, 5), screenMat);
-    screen.position.set(0, 7, 2.51);
-    group.add(screen);
-
-    // Base
-    const baseMat = new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.8, roughness: 0.2 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(7, 1, 6), baseMat);
-    base.position.y = 0.5;
-    group.add(base);
-
-    return group;
-  }
-
-  private createRealisticPlant(): THREE.Group {
-    const group = new THREE.Group();
-
-    // Pot
-    const potMat = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.8, metalness: 0.1 });
-    const pot = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2, 4, 16), potMat);
-    pot.position.y = 2;
-    pot.castShadow = true;
-    group.add(pot);
-
-    // Soil
-    const soilMat = new THREE.MeshStandardMaterial({ color: '#451a03', roughness: 1.0 });
-    const soil = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 0.5, 16), soilMat);
-    soil.position.y = 4;
-    group.add(soil);
-
-    // Leaves (spheres cluster)
-    const leafMat = new THREE.MeshStandardMaterial({ color: '#22c55e', roughness: 0.6 });
-    const positions = [
-      [0, 7, 0], [-1.5, 6.5, 1], [1.5, 6.5, -1], [0, 6, 1.5], [0.5, 7.5, -0.5]
-    ];
-    positions.forEach(([x, y, z]) => {
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(1.8, 12, 10), leafMat);
-      leaf.position.set(x, y, z);
-      leaf.castShadow = true;
-      group.add(leaf);
-    });
-
-    // Trunk
-    const trunkMat = new THREE.MeshStandardMaterial({ color: '#92400e', roughness: 0.8 });
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 3, 8), trunkMat);
-    trunk.position.y = 5;
-    group.add(trunk);
-
-    return group;
-  }
-
-  spawnObject(type: string): void {
-     const activeFloor = this.floorsData[this.activeFloorIndex];
-     if (!activeFloor) return;
-     const activeFloorId = activeFloor.id;
-     
-     const yLevel = activeFloor.level * 40;
-     let newObject: THREE.Object3D | null = null;
-
-     switch (type) {
-        case 'block': {
-          const room = this.createMiniStore(14, 10, 12, '#38bdf8', 'New Section');
-          room.userData = { type: 'block', name: 'New Section', color: '#38bdf8', lockedY: yLevel };
-          room.position.set(0, yLevel, 0);
-          newObject = room;
-          break;
-        }
-        case 'wall': {
-          const wall = this.createRealisticWall(30, 18);
-          wall.userData = { type: 'wall', name: 'Partition Wall', color: '#e2e8f0', lockedY: yLevel };
-          wall.position.set(0, yLevel, 0);
-          newObject = wall;
-          break;
-        }
-        case 'stairs': {
-          const stairs = this.createRealisticStairs();
-          stairs.userData = { type: 'stairs', name: 'Staircase', color: '#64748b', lockedY: yLevel };
-          stairs.position.set(0, yLevel, 0);
-          newObject = stairs;
-          break;
-        }
-        case 'plant': {
-          const plant = this.createRealisticPlant();
-          plant.userData = { type: 'plant', name: 'Decorative Plant', color: '#22c55e', lockedY: yLevel };
-          plant.position.set(0, yLevel, 0);
-          newObject = plant;
-          break;
-        }
-        case 'machine': {
-          const machine = this.createRealisticMachine();
-          machine.userData = { type: 'machine', name: 'Vending Machine', color: '#475569', lockedY: yLevel };
-          machine.position.set(0, yLevel, 0);
-          newObject = machine;
-          break;
-        }
-     }
-
-     if (newObject) {
-        newObject.castShadow = true;
-        newObject.receiveShadow = true;
-        newObject.userData['floorId'] = activeFloorId;
-        
-        this.scene.add(newObject);
-        this.modularObjects.push(newObject);
-        this.refreshObjectLabel(newObject);
-        
-        // Select immediately ΓÇö no setTimeout needed, stays in Angular zone
-        this.selectObject(newObject);
-     }
-  }
-
-  // --- POINTER / SELECTION HANDLING --- //
-
-  onCanvasPointerDown(event: PointerEvent): void {
-    this.pointerDownPos.x = event.clientX;
-    this.pointerDownPos.y = event.clientY;
-    this.pointerDownTime = Date.now();
-  }
-
-  onCanvasPointerUp(event: PointerEvent): void {
-    if (!this.editMode) return;
-
-    // Only treat as a click if the pointer didn't move much
-    const dx = event.clientX - this.pointerDownPos.x;
-    const dy = event.clientY - this.pointerDownPos.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist > 6) return; // It was a drag, not a click
-
-    // Calculate mouse pos in normalized device coords
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-    this.raycaster.setFromCamera(this.mouse, this.camera);
-    
-    // Only allow selecting user-spawned objects, not the base floor
-    const visibleModular = this.modularObjects.filter(o => o.visible);
-    const intersects = this.raycaster.intersectObjects(visibleModular, true);
-
-    if (intersects.length > 0) {
-       // Filter out Sprite objects (labels)
-       const validIntersects = intersects.filter(i => !(i.object instanceof THREE.Sprite));
-     
-       if (validIntersects.length > 0) {
-         let object = validIntersects[0].object as THREE.Object3D;
-         // Ascend to the root spawned object (where userData.type is set)
-         while (object.parent && object.parent !== this.scene && !object.userData['type']) {
-            object = object.parent;
-         }
-         if (object.userData['type']) {
-            this.selectObject(object);
-         } else {
-            this.deselectObject();
-         }
-       } else {
-         this.deselectObject();
-       }
-    } else {
-       this.deselectObject();
-    }
-  }
-
-  selectObject(object: THREE.Object3D): void {
-     this.ngZone.run(() => {
-       this.selectedObject = object;
-       this.hasSelection = true;
-       this.selectedObjectName = object.userData['name'] || 'Item';
-       this.selectedObjectColor = object.userData['color'] || '#ffffff';
-       this.selectedObjectType = object.userData['type'] || 'unknown';
-       
-       this.transformControl.attach(object);
-       this.setTransformMode(this.transformMode);
-       this.cdr.detectChanges();
-       // Belt-and-suspenders: schedule another detectChanges after microtask
-       setTimeout(() => this.cdr.detectChanges(), 10);
-     });
-  }
-
-  deselectObject(): void {
-     this.ngZone.run(() => {
-       this.selectedObject = null;
-       this.hasSelection = false;
-       this.selectedObjectName = '';
-       this.selectedObjectColor = '#ffffff';
-       this.selectedObjectType = '';
-       if (this.transformControl) this.transformControl.detach();
-       this.cdr.detectChanges();
-       setTimeout(() => this.cdr.detectChanges(), 10);
-     });
-  }
-
-  updateObjectName(): void {
-      if (this.selectedObject) {
-         this.selectedObject.userData['name'] = this.selectedObjectName;
-         this.refreshObjectLabel(this.selectedObject);
-      }
-  }
-
-  updateObjectColor(): void {
-      if (this.selectedObject) {
-         this.selectedObject.userData['color'] = this.selectedObjectColor;
-         
-         // Update color on all child meshes tagged as colorable
-         this.selectedObject.traverse((child) => {
-           if (child instanceof THREE.Mesh) {
-             if (child.userData['colorable']) {
-               const mat = child.material as THREE.MeshStandardMaterial;
-               mat.color.set(this.selectedObjectColor);
-               if (mat.emissive) {
-                 mat.emissive.set(this.selectedObjectColor);
-               }
-             }
-           }
-         });
-         
-         this.refreshObjectLabel(this.selectedObject);
-      }
-  }
-
-  private refreshObjectLabel(object: THREE.Object3D): void {
-      const oldLabel = object.children.find(c => c.userData['isLabel']);
-      if (oldLabel) {
-         object.remove(oldLabel);
-      }
-      const label = this.createTextSprite(object.userData['name'], object.userData['color'] || '#38bdf8');
-      
-      // Calculate label height from bounding box
-      const bbox = new THREE.Box3().setFromObject(object);
-      const height = bbox.max.y - object.position.y;
-      
-      label.position.set(0, height + 3, 0);
-      label.userData['isLabel'] = true;
-      object.add(label);
-  }
-
-  private createTextSprite(message: string, color: string): THREE.Sprite {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 256;
-    const context = canvas.getContext('2d');
-    if (context) {
-       // Background pill
-       const textUpper = message.toUpperCase();
-       context.font = 'bold 48px Inter, Segoe UI, sans-serif';
-       const metrics = context.measureText(textUpper);
-       const textW = metrics.width;
-       const pillW = Math.min(textW + 40, 500);
-       const pillH = 70;
-       const pillX = (512 - pillW) / 2;
-       const pillY = (256 - pillH) / 2;
-
-       // Rounded rect background
-       context.fillStyle = 'rgba(15, 23, 42, 0.85)';
-       context.beginPath();
-       context.roundRect(pillX, pillY, pillW, pillH, 16);
-       context.fill();
-
-       // Border
-       context.strokeStyle = color;
-       context.lineWidth = 2;
-       context.beginPath();
-       context.roundRect(pillX, pillY, pillW, pillH, 16);
-       context.stroke();
-
-       // Text
-       context.fillStyle = '#ffffff';
-       context.textAlign = 'center';
-       context.textBaseline = 'middle';
-       context.fillText(textUpper, 256, 128);
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.minFilter = THREE.LinearFilter;
-    
-    const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-    const sprite = new THREE.Sprite(spriteMat);
-    sprite.scale.set(16, 8, 1);
-    sprite.renderOrder = 999;
-    return sprite;
-  }
-
-  duplicateSelected(): void {
-      if (!this.selectedObject) return;
-      const clone = this.selectedObject.clone(true);
-      
-      // Clone all materials recursively so colors don't share references
-      clone.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.material) {
-          child.material = (child.material as THREE.Material).clone();
-        }
+  // ── Auto Layout ──────────────────────────────────────────
+  private autoLayout(presets: SectionPreset[]): MapSection[] {
+    const sections: MapSection[] = [];
+    const entrance = presets.find(p=>p.type==='entrance');
+    const billing   = presets.find(p=>p.type==='billing');
+    const others    = presets.filter(p=>p.type!=='entrance'&&p.type!=='billing');
+    const PAD=2, startX=2, startY=3, areaW=billing?67:96, areaH=entrance?70:94;
+    const cols = others.length<=2?2:others.length<=6?3:4;
+    const rows = Math.ceil(others.length/cols);
+    const cW=areaW/cols, cH=areaH/rows;
+    const badges = ['30% OFF','HOT','NEW','50% OFF','','','','',''];
+    others.forEach((p,i)=>{
+      sections.push({
+        id:this.genId(), type:p.type, name:p.name, color:p.color, icon:p.icon, aisle:`Aisle ${i+1}`,
+        badge: badges[i % badges.length] || undefined,
+        x:startX+(i%cols)*cW+PAD, y:startY+Math.floor(i/cols)*cH+PAD, w:cW-PAD*2, h:cH-PAD*2,
       });
-
-      clone.position.x += 15; // offset
-      clone.userData = { ...this.selectedObject.userData };
-      this.scene.add(clone);
-      this.modularObjects.push(clone);
-      this.selectObject(clone);
-  }
-
-  deleteSelected(): void {
-      if (!this.selectedObject) return;
-      this.scene.remove(this.selectedObject);
-      this.modularObjects = this.modularObjects.filter(o => o !== this.selectedObject);
-      this.deselectObject();
-  }
-
-  // --- THREE JS SETUP --- //
-
-  private initThreeJs(): void {
-    const container = this.canvasContainer.nativeElement;
-    
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#0f172a'); 
-    this.scene.fog = new THREE.FogExp2('#0f172a', 0.0015);
-
-    const aspect = container.clientWidth / container.clientHeight;
-    this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
-    this.camera.position.set(120, 120, 120);
-    this.camera.lookAt(0, 0, 0);
-
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
-    container.appendChild(this.renderer.domElement);
-
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    this.scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(80, 200, 60);
-    dirLight.castShadow = true;
-    dirLight.shadow.camera.top = 120;
-    dirLight.shadow.camera.bottom = -120;
-    dirLight.shadow.camera.left = -120;
-    dirLight.shadow.camera.right = 120;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    this.scene.add(dirLight);
-
-    // Fill light from opposite side
-    const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.4);
-    fillLight.position.set(-60, 80, -40);
-    this.scene.add(fillLight);
-
-    // Hemisphere light for ambient color variation
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e293b, 0.3);
-    this.scene.add(hemiLight);
-
-    // Orbit Controls ΓÇö no angle restrictions for full 360┬░ rotation
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    this.controls.autoRotate = true;
-    this.controls.autoRotateSpeed = 0.3;
-
-    // Transform Controls
-    this.transformControl = new TransformControls(this.camera, this.renderer.domElement);
-    this.transformControl.setTranslationSnap(5);
-    this.transformControl.setRotationSnap(THREE.MathUtils.degToRad(45));
-    this.transformControl.addEventListener('dragging-changed', (event) => {
-      this.controls.enabled = !(event.value as boolean);
-      this.isDraggingTransform = event.value as boolean;
     });
-    
-    // No axis locking ΓÇö allow free movement on all axes
+    if (billing) sections.unshift({ id:this.genId(), type:billing.type, name:billing.name, color:billing.color, icon:billing.icon, aisle:'Counter', badge:'Open', x:72, y:3, w:24, h:16 });
+    if (entrance) sections.push({ id:this.genId(), type:entrance.type, name:entrance.name, color:entrance.color, icon:entrance.icon, aisle:'Main Entry', x:25, y:79, w:50, h:18 });
+    return sections;
+  }
+  private genId(): string { return Math.random().toString(36).substr(2,9); }
 
-    this.scene.add(this.transformControl.getHelper());
-
-    // --- ALSO attach pointer listeners directly to the canvas element ---
-    // This ensures events are captured even if they don't bubble to the container div
-    const canvasEl = this.renderer.domElement;
-    canvasEl.addEventListener('pointerdown', (e: PointerEvent) => {
-      this.pointerDownPos.x = e.clientX;
-      this.pointerDownPos.y = e.clientY;
-      this.pointerDownTime = Date.now();
-    });
-    canvasEl.addEventListener('pointerup', (e: PointerEvent) => {
-      this.ngZone.run(() => this.onCanvasPointerUp(e));
-    });
-
-    this.animate();
+  // ── Canvas Setup ─────────────────────────────────────────
+  private initCanvas(): void {
+    if (!this.canvasRef || !this.wrapperRef) return;
+    this.canvas = this.canvasRef.nativeElement;
+    this.ctx = this.canvas.getContext('2d')!;
+    this.dpr = window.devicePixelRatio || 1;
+    this.resizeCanvas();
+    this.canvas.addEventListener('mousemove',  e=>this.onMouseMove(e));
+    this.canvas.addEventListener('mousedown',  e=>this.onMouseDown(e));
+    this.canvas.addEventListener('mouseup',    e=>this.onMouseUp(e));
+    this.canvas.addEventListener('mouseleave', ()=>this.onMouseLeave());
+    this.canvas.addEventListener('wheel',      e=>this.onWheel(e), { passive:false });
+    this.ngZone.runOutsideAngular(()=>this.startRenderLoop());
+  }
+  private resizeCanvas(): void {
+    if (!this.canvas||!this.wrapperRef) return;
+    const r = this.wrapperRef.nativeElement.getBoundingClientRect();
+    this.canvasW = r.width||800; this.canvasH = r.height||550;
+    this.canvas.width = this.canvasW*this.dpr; this.canvas.height = this.canvasH*this.dpr;
+    this.canvas.style.width = `${this.canvasW}px`; this.canvas.style.height = `${this.canvasH}px`;
+    this.ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
   }
 
-  private onWindowResize(): void {
-    if (!this.camera || !this.renderer || !this.canvasContainer) return;
-    const container = this.canvasContainer.nativeElement;
-    this.camera.aspect = container.clientWidth / container.clientHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
+  // ── Zoom / Pan ───────────────────────────────────────────
+  zoomIn():    void { this.zoom = Math.min(4, this.zoom*1.25); }
+  zoomOut():   void { this.zoom = Math.max(0.35, this.zoom/1.25); }
+  resetZoom(): void { this.zoom=1; this.panX=0; this.panY=0; }
+
+  private onWheel(e: WheelEvent): void {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 0.92;
+    this.zoom = Math.max(0.35, Math.min(4, this.zoom*factor));
   }
 
-  private animate(): void {
-    this.animationId = requestAnimationFrame(this.animate.bind(this));
-    
-    // No scene rotation ΓÇö OrbitControls.autoRotate handles the subtle camera movement
-    if (this.controls) this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+  // Map ↔ screen coordinate conversion (accounts for zoom+pan)
+  private screenToMap(sx: number, sy: number): {mx:number,my:number} {
+    const cx = this.canvasW/2, cy = this.canvasH/2;
+    return { mx:(sx-cx-this.panX)/this.zoom+cx, my:(sy-cy-this.panY)/this.zoom+cy };
+  }
+
+  // ── Render Loop ──────────────────────────────────────────
+  private startRenderLoop(): void {
+    const loop = (t:number)=>{
+      const dt=t-this.lastTime; this.lastTime=t;
+      this.pathOffset = (this.pathOffset+dt*0.028)%28;
+      this.pulsePhase = (this.pulsePhase+dt*0.003)%(Math.PI*2);
+      this.drawMap();
+      this.animFrame = requestAnimationFrame(loop);
+    };
+    this.animFrame = requestAnimationFrame(loop);
+  }
+
+  private drawMap(): void {
+    const ctx=this.ctx, W=this.canvasW, H=this.canvasH;
+    ctx.clearRect(0,0,W,H);
+
+    // Apply zoom + pan transform
+    ctx.save();
+    ctx.translate(W/2+this.panX, H/2+this.panY);
+    ctx.scale(this.zoom, this.zoom);
+    ctx.translate(-W/2, -H/2);
+
+    this.drawFloorTiles(ctx,W,H);
+    this.drawCeilingLights(ctx,W,H);
+    this.drawCorridors(ctx,W,H);
+
+    const secs = this.activeSections;
+    secs.filter(s=>s.id!==this.selectedSectionId).forEach(s=>this.drawSection(ctx,s,W,H,false));
+    const sel = secs.find(s=>s.id===this.selectedSectionId);
+    if (sel) this.drawSection(ctx,sel,W,H,true);
+
+    if (this.navigationActive && this.searchResult) {
+      const ent = secs.find(s=>s.type==='entrance');
+      if (ent) this.drawNavPath(ctx,ent,this.searchResult,W,H);
+    }
+    const entrance = secs.find(s=>s.type==='entrance');
+    if (entrance) {
+      this.drawYouAreHere(ctx, this.pct(entrance.x+entrance.w/2,W), this.pct(entrance.y+entrance.h/2,H));
+    }
+    ctx.restore();
+  }
+
+  // ── Floor Tiles ─────────────────────────────────────────
+  private drawFloorTiles(ctx: CanvasRenderingContext2D, W:number, H:number): void {
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0,0,W,H);
+    const ts = 44;
+    for (let x=0; x<=W; x+=ts) for (let y=0; y<=H; y+=ts) {
+      const even = (Math.floor(x/ts)+Math.floor(y/ts))%2===0;
+      ctx.fillStyle = even ? 'rgba(255,255,255,0.65)' : 'rgba(240,240,245,0.65)';
+      ctx.fillRect(x,y,ts,ts);
+      ctx.strokeStyle = 'rgba(200,210,220,0.5)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x,y,ts,ts);
+    }
+    // Outer wall
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 3;
+    this.roundRect(ctx,6,6,W-12,H-12,18); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    this.roundRect(ctx,6,6,W-12,H-12,18); ctx.fill();
+  }
+
+  // ── Ceiling Spotlights ──────────────────────────────────
+  private drawCeilingLights(ctx: CanvasRenderingContext2D, W:number, H:number): void {
+    const cols=4, rows=3;
+    for (let c=0; c<cols; c++) for (let r=0; r<rows; r++) {
+      const lx=(c+0.5)*W/cols, ly=(r+0.5)*H/rows;
+      const g = ctx.createRadialGradient(lx,ly,0,lx,ly,W/cols*0.65);
+      g.addColorStop(0,'rgba(255,255,240,0.18)');
+      g.addColorStop(1,'rgba(255,255,240,0)');
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(lx,ly,W/cols*0.65,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  // ── Corridors / Aisles ───────────────────────────────────
+  private drawCorridors(ctx: CanvasRenderingContext2D, W:number, H:number): void {
+    ctx.fillStyle = 'rgba(241,245,249,0.6)';
+    ctx.fillRect(W*0.01, H*0.74, W*0.98, H*0.07); // horizontal main aisle
+    // aisle numbering
+    ctx.font = 'bold 11px Inter,sans-serif'; ctx.fillStyle='#94a3b8';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    for (let i=1; i<=4; i++) ctx.fillText(`${i}`, W*(i/5), H*0.775);
+  }
+
+  // ── Section Drawing ─────────────────────────────────────
+  private drawSection(ctx: CanvasRenderingContext2D, s:MapSection, W:number, H:number, isSelected:boolean): void {
+    const x=this.pct(s.x,W), y=this.pct(s.y,H), w=this.pct(s.w,W), h=this.pct(s.h,H), r=10;
+
+    // Shadow
+    ctx.shadowColor   = isSelected ? `${s.color}66` : 'rgba(0,0,0,0.14)';
+    ctx.shadowBlur    = isSelected ? 26 : 12; ctx.shadowOffsetY = isSelected?7:4;
+
+    // Background
+    const bg = ctx.createLinearGradient(x,y,x,y+h);
+    bg.addColorStop(0, this.ha(s.color,.12)); bg.addColorStop(1, this.ha(s.color,.05));
+    ctx.fillStyle=bg; this.roundRect(ctx,x,y,w,h,r); ctx.fill();
+    ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+
+    // Border
+    ctx.strokeStyle = isSelected ? s.color : this.ha(s.color,.55);
+    ctx.lineWidth   = isSelected ? 2.5 : 1.5;
+    this.roundRect(ctx,x,y,w,h,r); ctx.stroke();
+
+    // Header strip
+    const sH = Math.min(h*0.2, 28);
+    const sg = ctx.createLinearGradient(x,y,x+w,y);
+    sg.addColorStop(0,s.color); sg.addColorStop(1,this.lighten(s.color,30));
+    ctx.fillStyle=sg; this.roundRectTop(ctx,x,y,w,sH,r); ctx.fill();
+
+    // Name on strip
+    ctx.save(); ctx.beginPath(); ctx.rect(x+4,y,w-8,sH); ctx.clip();
+    ctx.font = `bold ${Math.max(8,Math.min(12,w*.08))}px Inter,sans-serif`;
+    ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(s.name.toUpperCase(), x+w/2, y+sH/2);
+    ctx.restore();
+
+    // Interior furniture
+    this.drawSectionInterior(ctx, s.type, x, y+sH, w, h-sH, s.color);
+
+    // Icon
+    const iconSz = Math.max(16,Math.min(26,Math.min(w,h)*.2));
+    ctx.font=`${iconSz}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(s.icon, x+w/2, y+sH+(h-sH)*.78);
+
+    // Aisle label
+    if (h>80) {
+      ctx.font=`${Math.max(8,Math.min(10,w*.065))}px Inter,sans-serif`;
+      ctx.fillStyle='#64748b'; ctx.textBaseline='middle';
+      ctx.fillText(s.aisle, x+w/2, y+sH+(h-sH)*.92);
+    }
+
+    // Sale badge
+    if (s.badge) {
+      const bw=Math.max(44,s.badge.length*7+10), bh=16;
+      ctx.fillStyle='#ef4444';
+      this.roundRect(ctx, x+w-bw-4, y+4, bw, bh, 8); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.font='bold 9px Inter,sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(s.badge, x+w-4-bw/2, y+4+bh/2);
+    }
+
+    // Selected ring + handles
+    if (isSelected) {
+      ctx.strokeStyle=s.color; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+      this.roundRect(ctx,x-5,y-5,w+10,h+10,r+4); ctx.stroke(); ctx.setLineDash([]);
+      if (this.editMode) this.drawHandles(ctx,x,y,w,h,s.color);
+    }
+    if (this.hoveredSectionId===s.id&&!isSelected) {
+      ctx.strokeStyle=this.ha(s.color,.9); ctx.lineWidth=2.5;
+      this.roundRect(ctx,x-3,y-3,w+6,h+6,r+3); ctx.stroke();
+    }
+  }
+
+  // ── Section Interiors ──────────────────────────────────
+  private drawSectionInterior(ctx: CanvasRenderingContext2D, type:string, x:number, y:number, w:number, h:number, color:string): void {
+    const innerH = h*0.6, innerY = y+2;
+    switch(type) {
+      case 'grocery': case 'dairy': case 'bakery': case 'pharmacy':
+        this.drawShelves(ctx,x,innerY,w,innerH,color); break;
+      case 'clothing': case 'footwear': case 'sports':
+        this.drawRacks(ctx,x,innerY,w,innerH,color); break;
+      case 'electronics': case 'home':
+        this.drawDisplayTables(ctx,x,innerY,w,innerH,color); break;
+      case 'billing':
+        this.drawBillingCounters(ctx,x,innerY,w,innerH,color); break;
+      case 'entrance':
+        this.drawEntranceDoors(ctx,x,innerY,w,innerH,color); break;
+      case 'offers':
+        this.drawOfferShelf(ctx,x,innerY,w,innerH,color); break;
+    }
+  }
+
+  private drawShelves(ctx: CanvasRenderingContext2D, x:number, y:number, w:number, h:number, color:string): void {
+    const rows=3, rH=h/rows;
+    const pColors=['#ef4444','#22c55e','#3b82f6','#f59e0b','#8b5cf6','#ec4899'];
+    for (let r=0; r<rows; r++) {
+      const sy=y+r*rH;
+      ctx.fillStyle=this.ha(color,.13); ctx.fillRect(x+6,sy+1,w-12,rH*.55);
+      ctx.fillStyle=this.ha(color,.28); ctx.fillRect(x+6,sy+rH*.55,w-12,rH*.08); // shelf edge
+      const dots=Math.floor((w-20)/12);
+      for (let d=0; d<dots; d++) {
+        ctx.fillStyle=pColors[d%pColors.length]+'bb';
+        ctx.beginPath(); ctx.arc(x+12+d*((w-20)/dots),sy+rH*.3,3,0,Math.PI*2); ctx.fill();
+      }
+    }
+  }
+
+  private drawRacks(ctx: CanvasRenderingContext2D, x:number, y:number, w:number, h:number, color:string): void {
+    const racks=2, rSpacing=h/racks;
+    const gColors=[color,this.lighten(color,40),'#94a3b8',this.ha(color,.5)+'ff'];
+    for (let r=0; r<racks; r++) {
+      const ry=y+r*rSpacing+rSpacing*.2;
+      ctx.strokeStyle=this.ha(color,.5); ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.moveTo(x+8,ry); ctx.lineTo(x+w-8,ry); ctx.stroke();
+      const items=Math.floor((w-20)/16);
+      for (let i=0; i<items; i++) {
+        const ix=x+12+i*((w-20)/items);
+        ctx.fillStyle=gColors[i%gColors.length]; ctx.globalAlpha=.55;
+        ctx.beginPath(); ctx.rect(ix,ry+2,10,rSpacing*.35); ctx.fill();
+        ctx.globalAlpha=1;
+        ctx.strokeStyle=this.ha(color,.3); ctx.lineWidth=.8;
+        ctx.stroke();
+      }
+    }
+  }
+
+  private drawDisplayTables(ctx: CanvasRenderingContext2D, x:number, y:number, w:number, h:number, color:string): void {
+    const cols=3, tableRows=2, tw=(w-20)/cols, th=h/tableRows;
+    for (let r=0; r<tableRows; r++) for (let c=0; c<cols; c++) {
+      const tx=x+10+c*tw, ty=y+r*th+2;
+      ctx.fillStyle=this.ha(color,.2); ctx.fillRect(tx,ty,tw-4,th*.65);
+      // Screen glow
+      ctx.fillStyle='rgba(59,130,246,.28)'; ctx.fillRect(tx+3,ty+3,tw-10,th*.45);
+      // Glint
+      ctx.fillStyle='rgba(255,255,255,.25)'; ctx.fillRect(tx+3,ty+3,(tw-10)*.35,th*.13);
+    }
+  }
+
+  private drawBillingCounters(ctx: CanvasRenderingContext2D, x:number, y:number, w:number, h:number, color:string): void {
+    const lanes=Math.min(3, Math.floor(h/22));
+    const lH=h/lanes;
+    for (let l=0; l<lanes; l++) {
+      const ly=y+l*lH+2;
+      ctx.fillStyle=this.ha(color,.18); ctx.fillRect(x+6,ly,w*0.6,lH*.5);
+      ctx.fillStyle=this.ha(color,.4);  ctx.fillRect(x+6+w*0.6,ly,w*0.25,lH*.55);
+      // Belt stripes
+      ctx.strokeStyle=this.ha(color,.2); ctx.lineWidth=1; ctx.setLineDash([5,4]);
+      for (let s=0; s<3; s++) {
+        const sx=x+8+s*((w*0.6-8)/3);
+        ctx.beginPath(); ctx.moveTo(sx,ly); ctx.lineTo(sx,ly+lH*.5); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+  }
+
+  private drawEntranceDoors(ctx: CanvasRenderingContext2D, x:number, y:number, w:number, h:number, color:string): void {
+    // Glass door panels
+    [[x+w*.22,y,w*.22,h*.7],[x+w*.56,y,w*.22,h*.7]].forEach(([dx,dy,dw,dh])=>{
+      const g=ctx.createLinearGradient(dx as number,dy as number,dx as number+dw as number,dy as number);
+      g.addColorStop(0,'rgba(186,230,253,.45)'); g.addColorStop(1,'rgba(147,210,255,.2)');
+      ctx.fillStyle=g; ctx.fillRect(dx as number,dy as number,dw as number,dh as number);
+      ctx.strokeStyle=this.ha(color,.6); ctx.lineWidth=1.5;
+      ctx.strokeRect(dx as number,dy as number,dw as number,dh as number);
+      ctx.fillStyle='rgba(255,255,255,.3)'; ctx.fillRect(dx as number+2,dy as number+2,dw as number*.3,dh as number*.6);
+    });
+    // Shopping carts
+    this.drawCart(ctx, x+w*.08, y+h*.35, color);
+    this.drawCart(ctx, x+w*.82, y+h*.35, color);
+  }
+
+  private drawOfferShelf(ctx: CanvasRenderingContext2D, x:number, y:number, w:number, h:number, color:string): void {
+    const tags=['50%','30%','2+1','HOT'];
+    const tw=(w-16)/tags.length;
+    tags.forEach((t,i)=>{
+      const tx=x+8+i*tw, ty=y+h*.1;
+      ctx.fillStyle=this.ha(color,.2); this.roundRect(ctx,tx,ty,tw-4,h*.6,5); ctx.fill();
+      ctx.fillStyle=color; ctx.font=`bold ${Math.max(9,Math.min(13,tw*.3))}px Inter,sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(t,tx+tw/2-2,ty+h*.3);
+    });
+  }
+
+  private drawCart(ctx: CanvasRenderingContext2D, x:number, y:number, color:string): void {
+    const sc=7;
+    ctx.strokeStyle=this.ha(color,.7); ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.rect(x,y,sc*1.5,sc); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-sc*.4,y); ctx.lineTo(x-sc*.4,y-sc*.4); ctx.lineTo(x+sc*.3,y-sc*.4); ctx.stroke();
+    ctx.fillStyle=this.ha(color,.8);
+    [x+sc*.3,x+sc*1.2].forEach(wx=>{ ctx.beginPath(); ctx.arc(wx,y+sc+2,2.5,0,Math.PI*2); ctx.fill(); });
+  }
+
+  private drawHandles(ctx: CanvasRenderingContext2D, x:number, y:number, w:number, h:number, color:string): void {
+    [[x,y],[x+w/2,y],[x+w,y],[x,y+h/2],[x+w,y+h/2],[x,y+h],[x+w/2,y+h],[x+w,y+h]].forEach(([hx,hy])=>{
+      ctx.fillStyle='#fff'; ctx.strokeStyle=color; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(hx,hy,5,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    });
+  }
+
+  // ── Navigation Path ──────────────────────────────────────
+  private drawNavPath(ctx: CanvasRenderingContext2D, from:MapSection, to:MapSection, W:number, H:number): void {
+    const fx=this.pct(from.x+from.w/2,W), fy=this.pct(from.y+from.h/2,H);
+    const tx=this.pct(to.x+to.w/2,W),   ty=this.pct(to.y+to.h/2,H);
+    // Shadow
+    ctx.shadowColor='rgba(59,130,246,.3)'; ctx.shadowBlur=10;
+    // Animated dashes
+    ctx.strokeStyle='#3b82f6'; ctx.lineWidth=4; ctx.setLineDash([14,8]);
+    ctx.lineDashOffset=-this.pathOffset; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(fx,fy);
+    ctx.bezierCurveTo(fx+(tx-fx)*.1,fy, tx-(tx-fx)*.1,ty, tx,ty);
+    ctx.stroke(); ctx.setLineDash([]); ctx.shadowColor='transparent'; ctx.shadowBlur=0;
+    // Waypoint circles
+    [[fx,fy,true],[tx,ty,false]].forEach(([px,py,isFrom])=>{
+      ctx.fillStyle=isFrom?'#10b981':'#ef4444';
+      ctx.beginPath(); ctx.arc(px as number,py as number,7,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(px as number,py as number,3.5,0,Math.PI*2); ctx.fill();
+    });
+    // Arrow tip
+    const angle=Math.atan2(ty-fy,tx-fx);
+    const ar=14, ax=tx-Math.cos(angle)*ar, ay=ty-Math.sin(angle)*ar;
+    ctx.fillStyle='#2563eb';
+    ctx.beginPath();
+    ctx.moveTo(tx,ty);
+    ctx.lineTo(ax-Math.sin(angle)*8, ay+Math.cos(angle)*8);
+    ctx.lineTo(ax+Math.sin(angle)*8, ay-Math.cos(angle)*8);
+    ctx.closePath(); ctx.fill();
+  }
+
+  private drawYouAreHere(ctx: CanvasRenderingContext2D, x:number, y:number): void {
+    const p=Math.sin(this.pulsePhase);
+    // Pulse rings
+    [.3+p*.2, .15+p*.1].forEach((alpha,i)=>{
+      ctx.strokeStyle=`rgba(16,185,129,${alpha})`; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(x,y,24+(i+1)*8+p*5,0,Math.PI*2); ctx.stroke();
+    });
+    // Pin body
+    const pinH=28;
+    ctx.fillStyle='#10b981';
+    ctx.beginPath(); ctx.arc(x,y-pinH+8,12,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x-12,y-pinH+8); ctx.lineTo(x,y); ctx.lineTo(x+12,y-pinH+8); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y-pinH+8,5,0,Math.PI*2); ctx.fill();
+    // Label bubble
+    const label='You Are Here', lw=ctx.measureText(label).width+0;
+    ctx.font='bold 11px Inter,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    const bw=lw+22, bh=22, bx=x-bw/2, by=y-pinH-28;
+    ctx.fillStyle='#0f172a'; this.roundRect(ctx,bx,by,bw,bh,7); ctx.fill();
+    // Tail
+    ctx.beginPath(); ctx.moveTo(x-5,by+bh); ctx.lineTo(x,by+bh+7); ctx.lineTo(x+5,by+bh); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.fillText(label,x,by+bh/2);
+  }
+
+  // ── Mouse Events ─────────────────────────────────────────
+  private onMouseDown(e: MouseEvent): void {
+    if (e.button===1 || (e.button===0 && e.altKey)) {
+      this.isPanning=true; this.panStartX=e.clientX-this.panX; this.panStartY=e.clientY-this.panY;
+      this.canvas.style.cursor='grab'; return;
+    }
+    const r=this.canvas.getBoundingClientRect();
+    const {mx,my}=this.screenToMap(e.clientX-r.left, e.clientY-r.top);
+    this.mouseDownX=mx; this.mouseDownY=my;
+    const hit=this.hitTest(mx,my);
+    this.ngZone.run(()=>{
+      this.showAddSectionPanel=false;
+      if (hit) {
+        this.selectedSectionId=hit.id;
+        if (this.editMode) {
+          this.dragSectionId=hit.id; this.dragStartX=mx; this.dragStartY=my;
+          this.dragOrigX=hit.x; this.dragOrigY=hit.y;
+        }
+      } else { this.selectedSectionId=null; }
+      this.cdr.detectChanges();
+    });
+  }
+
+  private onMouseMove(e: MouseEvent): void {
+    if (this.isPanning) {
+      this.panX=e.clientX-this.panStartX; this.panY=e.clientY-this.panStartY;
+      this.canvas.style.cursor='grabbing'; return;
+    }
+    const r=this.canvas.getBoundingClientRect();
+    const {mx,my}=this.screenToMap(e.clientX-r.left, e.clientY-r.top);
+    if (this.editMode&&this.dragSectionId) {
+      if (Math.hypot(mx-this.mouseDownX,my-this.mouseDownY)>4) {
+        this.isDragging=true;
+        const s=this.activeSections.find(s=>s.id===this.dragSectionId);
+        if (s) {
+          s.x=Math.max(0,Math.min(100-s.w, this.dragOrigX+(mx-this.dragStartX)/this.canvasW*100));
+          s.y=Math.max(0,Math.min(100-s.h, this.dragOrigY+(my-this.dragStartY)/this.canvasH*100));
+        }
+      }
+    } else {
+      const hit=this.hitTest(mx,my); const id=hit?.id??null;
+      if (id!==this.hoveredSectionId) {
+        this.hoveredSectionId=id;
+        this.canvas.style.cursor=id?(this.editMode?'grab':'pointer'):'default';
+      }
+    }
+  }
+
+  private onMouseUp(e: MouseEvent): void {
+    if (this.isPanning) { this.isPanning=false; this.canvas.style.cursor='default'; return; }
+    this.isDragging=false; this.dragSectionId=null;
+  }
+  private onMouseLeave(): void {
+    this.hoveredSectionId=null; this.dragSectionId=null; this.isDragging=false;
+    this.isPanning=false; if(this.canvas) this.canvas.style.cursor='default';
+  }
+
+  private hitTest(mx:number, my:number): MapSection|null {
+    const secs=[...this.activeSections].reverse();
+    for (const s of secs) {
+      const x=this.pct(s.x,this.canvasW),y=this.pct(s.y,this.canvasH),w=this.pct(s.w,this.canvasW),h=this.pct(s.h,this.canvasH);
+      if (mx>=x&&mx<=x+w&&my>=y&&my<=y+h) return s;
+    }
+    return null;
+  }
+
+  // ── Section CRUD & UI ────────────────────────────────────
+  addSection(p: SectionPreset): void {
+    if (!this.activeFloor) return;
+    this.activeFloor.sections.push({ id:this.genId(), type:p.type, name:p.name, color:p.color, icon:p.icon, aisle:`Aisle ${this.activeSections.length+1}`, x:35,y:35,w:p.defaultW,h:p.defaultH });
+    this.showAddSectionPanel=false;
+  }
+  deleteSelectedSection(): void {
+    if (!this.activeFloor||!this.selectedSectionId) return;
+    this.activeFloor.sections=this.activeFloor.sections.filter(s=>s.id!==this.selectedSectionId);
+    this.selectedSectionId=null;
+  }
+  switchFloor(i:number): void { this.activeFloorIndex=i; this.selectedSectionId=null; this.searchResult=null; this.navigationActive=false; }
+  toggleEditMode(): void { this.editMode=!this.editMode; if(!this.editMode) this.selectedSectionId=null; }
+  selectSection(id:string): void { this.selectedSectionId=id===this.selectedSectionId?null:id; }
+  navigateTo(s: MapSection): void { this.searchResult=s; this.navigationActive=true; this.selectedSectionId=s.id; }
+  searchProduct(): void {
+    if (!this.searchQuery.trim()) { this.searchResult=null; this.navigationActive=false; return; }
+    const q=this.searchQuery.toLowerCase();
+    const r=this.activeSections.find(s=>s.name.toLowerCase().includes(q)||s.type.includes(q))??null;
+    this.searchResult=r; this.navigationActive=!!r;
+    if (r) { this.selectedSectionId=r.id; }
+  }
+  saveMap(): void { if (this.config) { localStorage.setItem('smartcart_store_map',JSON.stringify(this.config)); } }
+
+  // ── Helpers ──────────────────────────────────────────────
+  private pct(v:number,total:number): number { return (v/100)*total; }
+  private ha(hex:string,a:number): string {
+    const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return m?`rgba(${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)},${a})`:`rgba(128,128,128,${a})`;
+  }
+  private lighten(hex:string,amt:number): string {
+    const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return m?`rgb(${Math.min(255,parseInt(m[1],16)+amt)},${Math.min(255,parseInt(m[2],16)+amt)},${Math.min(255,parseInt(m[3],16)+amt)})`:hex;
+  }
+  private roundRect(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,r:number): void {
+    const R=Math.min(r,w/2,h/2); ctx.beginPath();
+    ctx.moveTo(x+R,y); ctx.lineTo(x+w-R,y); ctx.quadraticCurveTo(x+w,y,x+w,y+R);
+    ctx.lineTo(x+w,y+h-R); ctx.quadraticCurveTo(x+w,y+h,x+w-R,y+h);
+    ctx.lineTo(x+R,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-R);
+    ctx.lineTo(x,y+R); ctx.quadraticCurveTo(x,y,x+R,y); ctx.closePath();
+  }
+  private roundRectTop(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,r:number): void {
+    const R=Math.min(r,w/2,h); ctx.beginPath();
+    ctx.moveTo(x+R,y); ctx.lineTo(x+w-R,y); ctx.quadraticCurveTo(x+w,y,x+w,y+R);
+    ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h); ctx.lineTo(x,y+R); ctx.quadraticCurveTo(x,y,x+R,y); ctx.closePath();
   }
 }
