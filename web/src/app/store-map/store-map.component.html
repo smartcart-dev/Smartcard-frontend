@@ -1,5 +1,11 @@
 ﻿<div class="sm-root">
 
+  <!-- ══ SAVE TOAST ══ -->
+  <div class="save-toast" [class.visible]="saveStatus !== 'idle'" [class.error]="saveStatus === 'error'">
+    <span *ngIf="saveStatus === 'saving'">⏳ Saving map…</span>
+    <span *ngIf="saveStatus === 'saved' || saveStatus === 'error'">{{ saveMessage }}</span>
+  </div>
+
   <!-- ══ WIZARD OVERLAY ══ -->
   <div class="wizard-overlay" *ngIf="wizardActive">
     <div class="wizard-modal">
@@ -90,10 +96,13 @@
       </div>
       <div class="sm-header-actions">
         <button class="hdr-btn" (click)="wizardActive=true">⚙ Setup</button>
+        <button class="hdr-btn" (click)="exportJson()" title="Download map as JSON">⬇ Export</button>
         <button class="hdr-btn" [class.active]="editMode" (click)="toggleEditMode()">
           {{ editMode ? '👁 View' : '✏️ Edit Map' }}
         </button>
-        <button class="hdr-btn primary" (click)="saveMap()">💾 Save Map</button>
+        <button class="hdr-btn primary" (click)="saveMap()" [disabled]="saveStatus === 'saving'">
+          {{ saveStatus === 'saving' ? '⏳…' : '💾 Save Map' }}
+        </button>
       </div>
     </header>
 

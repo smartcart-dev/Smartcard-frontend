@@ -1,4 +1,17 @@
+// ── Global toast (outside .sm-root so it overlays everything) ──────────────
+.save-toast {
+  position: fixed; top: -60px; left: 50%; transform: translateX(-50%);
+  background: #10b981; color: #fff; padding: 10px 24px; border-radius: 12px;
+  font-size: 13px; font-weight: 700; z-index: 99999;
+  box-shadow: 0 8px 24px rgba(16,185,129,.4);
+  transition: top .35s cubic-bezier(.34,1.56,.64,1);
+  white-space: nowrap;
+  &.visible { top: 18px; }
+  &.error { background: #ef4444; box-shadow: 0 8px 24px rgba(239,68,68,.4); }
+}
+
 .sm-root {
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   font-family: 'Inter', 'Segoe UI', sans-serif;
   height: 100vh;

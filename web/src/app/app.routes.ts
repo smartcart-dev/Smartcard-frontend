@@ -10,6 +10,7 @@ export const appRoutes: Route[] = [
       { path: 'users', loadComponent: () => import('./users/users.component').then(m => m.UsersComponent) },
       { path: 'users/add', loadComponent: () => import('./users/add-user/add-user.component').then(m => m.AddUserComponent) },
       { path: 'store-map', loadComponent: () => import('./store-map/store-map.component').then(m => m.StoreMapComponent) },
+      { path: 'products',  loadComponent: () => import('./products/products.component').then(m => m.ProductsComponent) },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
     ]
   },

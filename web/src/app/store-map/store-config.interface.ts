@@ -1,10 +1,7 @@
+// ── Section Presets ─────────────────────────────────────────────────────────
 export interface SectionPreset {
-  type: string;
-  name: string;
-  color: string;
-  icon: string;
-  defaultW: number; // % of canvas width
-  defaultH: number; // % of canvas height
+  type: string; name: string; color: string; icon: string;
+  defaultW: number; defaultH: number;
 }
 
 export const SECTION_PRESETS: SectionPreset[] = [
@@ -22,34 +19,64 @@ export const SECTION_PRESETS: SectionPreset[] = [
   { type: 'sports',     name: 'Sports',          color: '#dc2626', icon: '⚽', defaultW: 18, defaultH: 16 },
 ];
 
+// ── Section ──────────────────────────────────────────────────────────────────
 export interface MapSection {
-  id: string;
-  type: string;
-  name: string;
-  color: string;
-  icon: string;
-  aisle: string;
-  badge?: string; // e.g. '30% OFF', 'HOT', 'NEW'
-  // Percentage-based position (0–100) relative to canvas
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+  id: string; type: string; name: string; color: string; icon: string;
+  aisle: string; badge?: string;
+  x: number; y: number; w: number; h: number; // percentage (0‑100) of canvas
 }
 
+// ── Floor ────────────────────────────────────────────────────────────────────
 export interface MapFloor {
-  id: string;
-  name: string;
-  level: number;
-  sections: MapSection[];
+  id: string; name: string; level: number; sections: MapSection[];
 }
 
+// ── Store Settings ────────────────────────────────────────────────────────────
+export interface StoreMapSettings {
+  primaryColor: string;
+  accentColor:  string;
+  logoUrl:      string;
+  currency:     string;
+  timezone:     string;
+}
+
+// ── Full Config (= what is saved to / loaded from the DB) ────────────────────
 export interface StoreMapConfig {
-  storeName: string;
-  floors: MapFloor[];
+  schemaVersion: string;            // '1.0'
+  storeId:       string;            // unique per store branch
+  tenantId:      string;            // your client's org ID (multi-tenant)
+  storeName:     string;
+  updatedAt?:    string;            // ISO timestamp (set by backend)
+  updatedBy?:    string;            // email / userId
+  version?:      number;            // auto-incremented by backend
+  settings:      StoreMapSettings;
+  floors:        MapFloor[];
 }
 
+// ── Save/Load API response shapes ────────────────────────────────────────────
+export interface SaveMapResponse {
+  success:  boolean;
+  storeId?: string;
+  savedAt?: string;
+  version?: number;
+  message?: string;
+  error?:   { code: string; message: string; status: number };
+}
+
+export interface LoadMapResponse {
+  success: boolean;
+  data?:   StoreMapConfig;
+  meta?:   { storeId: string; tenantId: string; savedAt: string; version: number };
+  error?:  { code: string; message: string; status: number };
+}
+
+// ── Wizard helper ────────────────────────────────────────────────────────────
 export interface WizardFloorSetup {
   name: string;
   selectedTypes: Set<string>;
+}
+
+// ── Default settings factory ──────────────────────────────────────────────────
+export function defaultSettings(): StoreMapSettings {
+  return { primaryColor:'#22c55e', accentColor:'#3b82f6', logoUrl:'', currency:'INR', timezone:'Asia/Kolkata' };
 }
