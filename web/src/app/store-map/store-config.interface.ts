@@ -29,6 +29,7 @@ export interface MapSection {
   color: string;
   icon: string;
   aisle: string;
+  badge?: string; // e.g. '30% OFF', 'HOT', 'NEW'
   // Percentage-based position (0–100) relative to canvas
   x: number;
   y: number;
