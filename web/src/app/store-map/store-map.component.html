@@ -184,6 +184,33 @@
             <label>Badge</label>
             <input type="text" [(ngModel)]="selectedSection.badge" placeholder="e.g. 30% OFF"/>
           </div>
+          <!-- Rotation -->
+          <div class="prop-row prop-row-rotate">
+            <label>Rotation: {{ selectedSection.rotation ?? 0 }}°</label>
+            <div class="rotate-controls">
+              <button class="prop-btn" (click)="rotateSection(-15)" title="Rotate −15°">↺</button>
+              <input type="range" min="0" max="360" step="5"
+                     [value]="selectedSection.rotation ?? 0"
+                     (input)="selectedSection.rotation = +$any($event.target).value"/>
+              <button class="prop-btn" (click)="rotateSection(15)" title="Rotate +15°">↻</button>
+            </div>
+          </div>
+          <!-- Size -->
+          <div class="prop-row prop-row-size">
+            <label>Size (W × H): {{ selectedSection.w | number:'1.0-0' }} × {{ selectedSection.h | number:'1.0-0' }}</label>
+            <div class="size-controls">
+              <div class="size-axis">
+                <span>W</span>
+                <button class="prop-btn" (click)="resizeSection(-2,0)">−</button>
+                <button class="prop-btn" (click)="resizeSection(2,0)">+</button>
+              </div>
+              <div class="size-axis">
+                <span>H</span>
+                <button class="prop-btn" (click)="resizeSection(0,-2)">−</button>
+                <button class="prop-btn" (click)="resizeSection(0,2)">+</button>
+              </div>
+            </div>
+          </div>
           <button class="delete-section-btn" (click)="deleteSelectedSection()">🗑️ Delete Section</button>
         </div>
 

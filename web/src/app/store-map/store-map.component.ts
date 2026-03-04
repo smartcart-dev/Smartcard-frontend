@@ -25,6 +25,7 @@ const MOCK_PRODUCTS: Record<string, string[]> = {
   pharmacy:    ['💊 Medicines','🩺 First-Aid','💆 Vitamins'],
   sports:      ['⚽ Football','🏏 Cricket Gear','🎾 Tennis','🏋️ Fitness'],
   entrance:    ['🛒 Shopping Carts','🗺️ Store Map','ℹ️ Info Desk'],
+  stairs:      ['⬆️ Up to Floor 1','⬇️ Down to Ground','♿ Accessible Route'],
 };
 
 // ── Save Status ───────────────────────────────────────────────────────────────
@@ -85,6 +86,12 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
   private dragOrigX = 0; private dragOrigY = 0;
   private mouseDownX = 0; private mouseDownY = 0;
 
+  // ── Resize ───────────────────────────────────────────────────────────────
+  private isResizing = false; private resizeEdge: string|null = null;
+  private resizeOrigX = 0; private resizeOrigY = 0;
+  private resizeOrigW = 0; private resizeOrigH = 0;
+  private readonly HANDLE_HIT_PX = 10; // pixels
+
   // ── Accessors ─────────────────────────────────────────────────────────────
   get activeFloor():    MapFloor|null   { return this.config?.floors[this.activeFloorIndex] ?? null; }
   get activeSections(): MapSection[]    { return this.activeFloor?.sections ?? []; }
@@ -118,7 +125,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
   // ── API: Load ─────────────────────────────────────────────────────────────
   async loadMapFromApi(): Promise<void> {
     try {
-      const res = await fetch(`${this.apiBase}/store-map/${this.storeId}`, {
+      const res = await fetch(`${this.apiBase}/api/v1/masters/store_map`, {
         headers: this.buildHeaders(),
       });
       if (!res.ok) return; // no map yet → show wizard
@@ -156,7 +163,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     localStorage.setItem(`smartcart_map_${this.storeId}`, JSON.stringify(payload));
 
     try {
-      const res = await fetch(`${this.apiBase}/store-map/${this.storeId}`, {
+      const res = await fetch(`${this.apiBase}/api/v1/masters/store_map`, {
         method:  'POST',
         headers: this.buildHeaders(),
         body:    JSON.stringify(payload),
@@ -324,37 +331,73 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     ctx.restore();
   }
 
-  // ── Floor Tiles ──────────────────────────────────────────────────────────
+  // ── Floor Tiles (marble + grout + EXIT + pillars) ──────────────────────────
   private drawFloorTiles(ctx:CanvasRenderingContext2D,W:number,H:number): void {
-    ctx.fillStyle='#f0f4f8'; ctx.fillRect(0,0,W,H);
-    const ts=44;
-    for(let x=0;x<=W;x+=ts)for(let y=0;y<=H;y+=ts){
-      ctx.fillStyle=(Math.floor(x/ts)+Math.floor(y/ts))%2===0?'rgba(255,255,255,.7)':'rgba(235,240,248,.7)';
-      ctx.fillRect(x,y,ts,ts);
-      ctx.strokeStyle='rgba(200,215,230,.45)'; ctx.lineWidth=.5; ctx.strokeRect(x,y,ts,ts);
+    ctx.fillStyle='#e8edf3'; ctx.fillRect(0,0,W,H);
+    const ts=52;
+    for(let xi=0;xi*ts<=W;xi++)for(let yi=0;yi*ts<=H;yi++){
+      const x=xi*ts,y=yi*ts,isL=(xi+yi)%2===0;
+      const tg=ctx.createLinearGradient(x,y,x+ts,y+ts);
+      if(isL){tg.addColorStop(0,'rgba(255,255,255,.82)');tg.addColorStop(.5,'rgba(248,250,252,.72)');tg.addColorStop(1,'rgba(240,245,250,.78)');}
+      else{tg.addColorStop(0,'rgba(226,234,242,.78)');tg.addColorStop(.5,'rgba(219,228,238,.68)');tg.addColorStop(1,'rgba(212,222,234,.74)');}
+      ctx.fillStyle=tg; ctx.fillRect(x,y,ts,ts);
+      ctx.save(); ctx.beginPath(); ctx.rect(x,y,ts,ts); ctx.clip();
+      ctx.strokeStyle=isL?'rgba(180,200,220,.15)':'rgba(160,180,200,.11)'; ctx.lineWidth=.6;
+      ctx.beginPath(); ctx.moveTo(x+ts*.2,y); ctx.lineTo(x+ts*.8,y+ts); ctx.stroke(); ctx.restore();
+      ctx.strokeStyle='rgba(160,180,200,.5)'; ctx.lineWidth=.8; ctx.strokeRect(x+.4,y+.4,ts-.8,ts-.8);
     }
-    ctx.strokeStyle='#94a3b8'; ctx.lineWidth=3; this.roundRect(ctx,6,6,W-12,H-12,18); ctx.stroke();
-    ctx.fillStyle='rgba(255,255,255,.12)'; this.roundRect(ctx,6,6,W-12,H-12,18); ctx.fill();
+    ctx.strokeStyle='#475569'; ctx.lineWidth=8; this.roundRect(ctx,4,4,W-8,H-8,16); ctx.stroke();
+    ctx.strokeStyle='#94a3b8'; ctx.lineWidth=2; this.roundRect(ctx,12,12,W-24,H-24,10); ctx.stroke();
+    ctx.fillStyle='#dc2626'; this.roundRect(ctx,16,H-26,38,14,3); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='bold 9px Inter,sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText('EXIT →',20,H-19);
+    ([[.13,.2],[.5,.2],[.87,.2],[.13,.6],[.5,.6],[.87,.6]] as [number,number][]).forEach(([px,py])=>{
+      const cx=W*px,cy=H*py,sz=14;
+      const pg=ctx.createRadialGradient(cx,cy,0,cx,cy,sz); pg.addColorStop(0,'#dde3ea'); pg.addColorStop(1,'#94a3b8');
+      ctx.fillStyle=pg; this.roundRect(ctx,cx-sz/2,cy-sz/2,sz,sz,3); ctx.fill();
+      ctx.strokeStyle='#64748b'; ctx.lineWidth=1; this.roundRect(ctx,cx-sz/2,cy-sz/2,sz,sz,3); ctx.stroke();
+      ctx.fillStyle='rgba(0,0,0,.1)'; this.roundRect(ctx,cx-sz/2+2,cy+sz/2,sz-2,5,1); ctx.fill();
+    });
   }
 
   private drawCeilingLights(ctx:CanvasRenderingContext2D,W:number,H:number): void {
     for(let c=0;c<4;c++)for(let r=0;r<3;r++){
-      const g=ctx.createRadialGradient((c+.5)*W/4,(r+.5)*H/3,0,(c+.5)*W/4,(r+.5)*H/3,W/4*.65);
-      g.addColorStop(0,'rgba(255,255,240,.2)'); g.addColorStop(1,'rgba(255,255,240,0)');
-      ctx.fillStyle=g; ctx.beginPath(); ctx.arc((c+.5)*W/4,(r+.5)*H/3,W/4*.65,0,Math.PI*2); ctx.fill();
+      const cx=(c+.5)*W/4,cy=(r+.5)*H/3;
+      const glow=ctx.createRadialGradient(cx,cy,0,cx,cy,W/4*.7);
+      glow.addColorStop(0,'rgba(255,255,235,.22)'); glow.addColorStop(1,'rgba(255,255,235,0)');
+      ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(cx,cy,W/4*.7,0,Math.PI*2); ctx.fill();
+      // LED panel rect
+      ctx.fillStyle='#f1f5f9'; ctx.fillRect(cx-15,cy-5,30,10);
+      ctx.fillStyle='rgba(254,249,195,.9)'; ctx.fillRect(cx-13,cy-3,26,6);
+      ctx.strokeStyle='#cbd5e1'; ctx.lineWidth=.7; ctx.strokeRect(cx-15,cy-5,30,10);
+      for(let d=0;d<4;d++){ctx.fillStyle='rgba(253,224,71,.9)'; ctx.beginPath(); ctx.arc(cx-13+d*9,cy,1.5,0,Math.PI*2); ctx.fill();}
     }
   }
 
   private drawCorridors(ctx:CanvasRenderingContext2D,W:number,H:number): void {
-    ctx.fillStyle='rgba(226,234,240,.55)';
-    ctx.fillRect(W*.01,H*.74,W*.98,H*.06);
+    const aY=H*.74,aH=H*.065;
+    const cg=ctx.createLinearGradient(0,aY,0,aY+aH);
+    cg.addColorStop(0,'rgba(248,250,252,.9)'); cg.addColorStop(.5,'rgba(241,245,249,.75)'); cg.addColorStop(1,'rgba(226,232,240,.85)');
+    ctx.fillStyle=cg; ctx.fillRect(W*.01,aY,W*.98,aH);
+    // Centre dashed lane line
+    ctx.strokeStyle='rgba(148,163,184,.5)'; ctx.lineWidth=1; ctx.setLineDash([12,10]);
+    ctx.beginPath(); ctx.moveTo(W*.01,aY+aH/2); ctx.lineTo(W*.99,aY+aH/2); ctx.stroke(); ctx.setLineDash([]);
+    // Aisle labels + arrows
     ctx.font='bold 10px Inter,sans-serif'; ctx.fillStyle='#94a3b8'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    for(let i=1;i<=4;i++)ctx.fillText(`${i}`,W*(i/5),H*.77);
+    for(let i=1;i<=4;i++){
+      const ax=W*(i/5); ctx.fillText(`${i}`,ax,aY+aH*.78);
+      ctx.strokeStyle='rgba(148,163,184,.4)'; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(ax-10,aY+aH*.28); ctx.lineTo(ax+10,aY+aH*.28);
+      ctx.moveTo(ax+6,aY+aH*.28-4); ctx.lineTo(ax+10,aY+aH*.28); ctx.lineTo(ax+6,aY+aH*.28+4); ctx.stroke();
+    }
   }
 
   // ── Section Drawing ───────────────────────────────────────────────────────
   private drawSection(ctx:CanvasRenderingContext2D,s:MapSection,W:number,H:number,isSel:boolean): void {
     const x=this.pct(s.x,W),y=this.pct(s.y,H),w=this.pct(s.w,W),h=this.pct(s.h,H),r=10;
+    const cx=x+w/2,cy=y+h/2,rot=((s.rotation??0)*Math.PI)/180;
+    ctx.save();
+    if(rot!==0){ctx.translate(cx,cy);ctx.rotate(rot);ctx.translate(-cx,-cy);}
     ctx.shadowColor=isSel?`${s.color}66`:'rgba(0,0,0,.13)';
     ctx.shadowBlur=isSel?28:14; ctx.shadowOffsetY=isSel?7:4;
     const bg=ctx.createLinearGradient(x,y,x,y+h);
@@ -391,6 +434,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
       ctx.strokeStyle=this.ha(s.color,.9); ctx.lineWidth=2.5;
       this.roundRect(ctx,x-3,y-3,w+6,h+6,r+3); ctx.stroke();
     }
+    ctx.restore();
   }
 
   // ── Section Interiors ─────────────────────────────────────────────────────
@@ -402,6 +446,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     else if(type==='billing')                                  this.drawBillingCounters(ctx,x,iY,w,iH,color);
     else if(type==='entrance')                                 this.drawEntranceDoors(ctx,x,iY,w,iH,color);
     else if(type==='offers')                                   this.drawOfferShelf(ctx,x,iY,w,iH,color);
+    else if(type==='stairs')                                   this.drawStairs(ctx,x,iY,w,iH,color);
   }
 
   private drawShelves(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,color:string): void {
@@ -474,19 +519,46 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  private drawStairs(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,color:string): void {
+    const steps=5,sH=h*.55/steps,sW=w*.75;
+    ctx.strokeStyle=this.ha(color,.7); ctx.lineWidth=1.4;
+    for(let i=0;i<steps;i++){
+      const sy=y+i*sH,sx=x+w*.12+i*(sW/steps)*.08;
+      ctx.fillStyle=this.ha(color,i%2===0?.2:.12); ctx.fillRect(sx,sy,sW-i*3,sH*.7);
+      ctx.strokeStyle=this.ha(color,.5); ctx.lineWidth=1; ctx.strokeRect(sx,sy,sW-i*3,sH*.7);
+    }
+    // Handrail lines
+    ctx.strokeStyle=this.ha(color,.8); ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x+w*.12,y); ctx.lineTo(x+w*.85,y+h*.55); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+w*.12,y+sH*.7); ctx.lineTo(x+w*.85,y+h*.55+sH*.7); ctx.stroke();
+    // Up/Down arrows
+    ctx.fillStyle=color; ctx.font=`${Math.max(9,Math.min(12,w*.12))}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('⬆',x+w/2-6,y+h*.72); ctx.fillText('⬇',x+w/2+6,y+h*.72);
+  }
+
+  private drawHandles(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,color:string): void {
+    // 8 handles: 4 corners (square, for resize) + 4 edge midpoints (circle, for info)
+    const corners:Array<[number,number,string]> = [
+      [x,y,'nw'],[x+w,y,'ne'],[x,y+h,'sw'],[x+w,y+h,'se']
+    ];
+    const edges:Array<[number,number]> = [[x+w/2,y],[x,y+h/2],[x+w,y+h/2],[x+w/2,y+h]];
+    corners.forEach(([hx,hy])=>{
+      ctx.fillStyle='#fff'; ctx.strokeStyle=color; ctx.lineWidth=1.8;
+      ctx.fillRect(hx-5,hy-5,10,10); ctx.strokeRect(hx-5,hy-5,10,10);
+    });
+    edges.forEach(([hx,hy])=>{
+      ctx.fillStyle='#fff'; ctx.strokeStyle=color; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(hx,hy,4,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    });
+  }
+
   private drawCart(ctx:CanvasRenderingContext2D,x:number,y:number,color:string): void {
     const sc=7; ctx.strokeStyle=this.ha(color,.7); ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.rect(x,y,sc*1.5,sc); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x-sc*.4,y); ctx.lineTo(x-sc*.4,y-sc*.4); ctx.lineTo(x+sc*.3,y-sc*.4); ctx.stroke();
     ctx.fillStyle=this.ha(color,.8);
     [x+sc*.3,x+sc*1.2].forEach(wx=>{ ctx.beginPath(); ctx.arc(wx,y+sc+2,2.5,0,Math.PI*2); ctx.fill(); });
-  }
-
-  private drawHandles(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,color:string): void {
-    [[x,y],[x+w/2,y],[x+w,y],[x,y+h/2],[x+w,y+h/2],[x,y+h],[x+w/2,y+h],[x+w,y+h]].forEach(([hx,hy])=>{
-      ctx.fillStyle='#fff'; ctx.strokeStyle=color; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.arc(hx,hy,5,0,Math.PI*2); ctx.fill(); ctx.stroke();
-    });
   }
 
   // ── Nav Path ─────────────────────────────────────────────────────────────
@@ -520,16 +592,64 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
   }
 
   // ── Mouse Events ─────────────────────────────────────────────────────────
+  /** Returns which resize edge ('nw','n','ne','w','e','sw','s','se') the mouse is near, or null */
+  private hitHandle(mx:number,my:number,s:MapSection): string|null {
+    const x=this.pct(s.x,this.canvasW),y=this.pct(s.y,this.canvasH);
+    const w=this.pct(s.w,this.canvasW),h=this.pct(s.h,this.canvasH);
+    const d=this.HANDLE_HIT_PX/this.zoom;
+    const onL=Math.abs(mx-x)<d, onR=Math.abs(mx-(x+w))<d;
+    const onT=Math.abs(my-y)<d, onB=Math.abs(my-(y+h))<d;
+    if(onL&&onT)return 'nw'; if(onR&&onT)return 'ne';
+    if(onL&&onB)return 'sw'; if(onR&&onB)return 'se';
+    if(onT&&mx>x&&mx<x+w)return 'n'; if(onB&&mx>x&&mx<x+w)return 's';
+    if(onL&&my>y&&my<y+h)return 'w'; if(onR&&my>y&&my<y+h)return 'e';
+    return null;
+  }
+  private static readonly RESIZE_CURSORS: Record<string,string> = {
+    'nw':'nw-resize','n':'n-resize','ne':'ne-resize','w':'w-resize',
+    'e':'e-resize','sw':'sw-resize','s':'s-resize','se':'se-resize'
+  };
   private onMouseDown(e:MouseEvent): void {
     if(e.button===1||(e.button===0&&e.altKey)){ this.isPanning=true; this.panStartX=e.clientX-this.panX; this.panStartY=e.clientY-this.panY; this.canvas.style.cursor='grab'; return; }
     const r=this.canvas.getBoundingClientRect(),{mx,my}=this.screenToMap(e.clientX-r.left,e.clientY-r.top);
     this.mouseDownX=mx; this.mouseDownY=my;
+    // Check resize handle first (only when editMode and section selected)
+    if(this.editMode&&this.selectedSectionId){
+      const sel=this.activeSections.find(s=>s.id===this.selectedSectionId);
+      if(sel){
+        const edge=this.hitHandle(mx,my,sel);
+        if(edge){
+          this.isResizing=true; this.resizeEdge=edge;
+          this.dragStartX=mx; this.dragStartY=my;
+          this.resizeOrigX=sel.x; this.resizeOrigY=sel.y;
+          this.resizeOrigW=sel.w; this.resizeOrigH=sel.h;
+          return;
+        }
+      }
+    }
     const hit=this.hitTest(mx,my);
     this.ngZone.run(()=>{ this.showAddSectionPanel=false; if(hit){ this.selectedSectionId=hit.id; if(this.editMode){ this.dragSectionId=hit.id; this.dragStartX=mx; this.dragStartY=my; this.dragOrigX=hit.x; this.dragOrigY=hit.y; } }else this.selectedSectionId=null; this.cdr.detectChanges(); });
   }
   private onMouseMove(e:MouseEvent): void {
     if(this.isPanning){ this.panX=e.clientX-this.panStartX; this.panY=e.clientY-this.panStartY; this.canvas.style.cursor='grabbing'; return; }
     const r=this.canvas.getBoundingClientRect(),{mx,my}=this.screenToMap(e.clientX-r.left,e.clientY-r.top);
+    // Resize drag
+    if(this.editMode&&this.isResizing&&this.resizeEdge&&this.selectedSectionId){
+      const s=this.activeSections.find(s=>s.id===this.selectedSectionId);
+      if(s){
+        const dx=(mx-this.dragStartX)/this.canvasW*100;
+        const dy=(my-this.dragStartY)/this.canvasH*100;
+        const edge=this.resizeEdge;
+        const MIN=5;
+        if(edge.includes('e')){ s.w=Math.max(MIN,this.resizeOrigW+dx); }
+        if(edge.includes('s')){ s.h=Math.max(MIN,this.resizeOrigH+dy); }
+        if(edge.includes('w')){ const newW=Math.max(MIN,this.resizeOrigW-dx); s.x=this.resizeOrigX+(this.resizeOrigW-newW); s.w=newW; }
+        if(edge.includes('n')){ const newH=Math.max(MIN,this.resizeOrigH-dy); s.y=this.resizeOrigY+(this.resizeOrigH-newH); s.h=newH; }
+      }
+      this.canvas.style.cursor=StoreMapComponent.RESIZE_CURSORS[this.resizeEdge]??'crosshair';
+      return;
+    }
+    // Move drag
     if(this.editMode&&this.dragSectionId){
       if(Math.hypot(mx-this.mouseDownX,my-this.mouseDownY)>4){
         this.isDragging=true;
@@ -537,12 +657,24 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
         if(s){ s.x=Math.max(0,Math.min(100-s.w,this.dragOrigX+(mx-this.dragStartX)/this.canvasW*100)); s.y=Math.max(0,Math.min(100-s.h,this.dragOrigY+(my-this.dragStartY)/this.canvasH*100)); }
       }
     } else {
+      // Hover: update cursor based on handle proximity
+      if(this.editMode&&this.selectedSectionId){
+        const sel=this.activeSections.find(s=>s.id===this.selectedSectionId);
+        if(sel){
+          const edge=this.hitHandle(mx,my,sel);
+          if(edge){ this.canvas.style.cursor=StoreMapComponent.RESIZE_CURSORS[edge]; return; }
+        }
+      }
       const hit=this.hitTest(mx,my),id=hit?.id??null;
       if(id!==this.hoveredSectionId){ this.hoveredSectionId=id; this.canvas.style.cursor=id?(this.editMode?'grab':'pointer'):'default'; }
     }
   }
-  private onMouseUp(e:MouseEvent): void { if(this.isPanning){this.isPanning=false;this.canvas.style.cursor='default';return;} this.isDragging=false; this.dragSectionId=null; }
-  private onMouseLeave(): void { this.hoveredSectionId=null; this.dragSectionId=null; this.isDragging=false; this.isPanning=false; if(this.canvas)this.canvas.style.cursor='default'; }
+  private onMouseUp(_e:MouseEvent): void {
+    if(this.isPanning){this.isPanning=false;this.canvas.style.cursor='default';return;}
+    if(this.isResizing){this.isResizing=false;this.resizeEdge=null;this.canvas.style.cursor='default';return;}
+    this.isDragging=false; this.dragSectionId=null;
+  }
+  private onMouseLeave(): void { this.hoveredSectionId=null; this.dragSectionId=null; this.isDragging=false; this.isPanning=false; this.isResizing=false; this.resizeEdge=null; if(this.canvas)this.canvas.style.cursor='default'; }
   private hitTest(mx:number,my:number): MapSection|null {
     for(const s of [...this.activeSections].reverse()){
       const x=this.pct(s.x,this.canvasW),y=this.pct(s.y,this.canvasH),w=this.pct(s.w,this.canvasW),h=this.pct(s.h,this.canvasH);
@@ -558,6 +690,8 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     this.showAddSectionPanel=false;
   }
   deleteSelectedSection(): void { if(!this.activeFloor||!this.selectedSectionId)return; this.activeFloor.sections=this.activeFloor.sections.filter(s=>s.id!==this.selectedSectionId); this.selectedSectionId=null; }
+  rotateSection(delta:number): void { const s=this.selectedSection; if(!s)return; s.rotation=((s.rotation??0)+delta+360)%360; }
+  resizeSection(dw:number,dh:number): void { const s=this.selectedSection; if(!s)return; s.w=Math.max(5,Math.min(60,s.w+dw)); s.h=Math.max(5,Math.min(60,s.h+dh)); }
   switchFloor(i:number): void { this.activeFloorIndex=i; this.selectedSectionId=null; this.searchResult=null; this.navigationActive=false; }
   toggleEditMode(): void { this.editMode=!this.editMode; if(!this.editMode)this.selectedSectionId=null; }
   selectSection(id:string): void { this.selectedSectionId=id===this.selectedSectionId?null:id; }

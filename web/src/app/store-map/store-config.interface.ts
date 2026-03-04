@@ -17,13 +17,15 @@ export const SECTION_PRESETS: SectionPreset[] = [
   { type: 'dairy',      name: 'Dairy',           color: '#2563eb', icon: '🥛', defaultW: 14, defaultH: 16 },
   { type: 'pharmacy',   name: 'Pharmacy',        color: '#16a34a', icon: '💊', defaultW: 14, defaultH: 14 },
   { type: 'sports',     name: 'Sports',          color: '#dc2626', icon: '⚽', defaultW: 18, defaultH: 16 },
+  { type: 'stairs',     name: 'Stairs',          color: '#64748b', icon: '🪜', defaultW: 12, defaultH: 16 },
 ];
 
 // ── Section ──────────────────────────────────────────────────────────────────
 export interface MapSection {
   id: string; type: string; name: string; color: string; icon: string;
   aisle: string; badge?: string;
-  x: number; y: number; w: number; h: number; // percentage (0‑100) of canvas
+  x: number; y: number; w: number; h: number; // percentage (0-100) of canvas
+  rotation?: number; // degrees 0-360
 }
 
 // ── Floor ────────────────────────────────────────────────────────────────────

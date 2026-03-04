@@ -166,11 +166,26 @@
       background:#fff; border-radius:16px; padding:16px; min-width:340px;
       box-shadow:0 12px 40px rgba(0,0,0,.18); border:1.5px solid #e2e8f0; display:flex; flex-direction:column; gap:10px;
       .props-header { font-size:15px; font-weight:700; color:#0f172a; padding-bottom:10px; border-bottom:3px solid; }
-      .prop-row { display:flex; align-items:center; gap:10px;
+      .prop-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
         label { font-size:12px; font-weight:600; color:#64748b; min-width:48px; }
         input[type=text] { flex:1; padding:8px 12px; border-radius:8px; border:1.5px solid #e2e8f0; font-size:13px; outline:none; &:focus { border-color:#3b82f6; } }
         input[type=color] { width:48px; height:34px; border-radius:8px; border:1.5px solid #e2e8f0; cursor:pointer; padding:2px; }
       }
+      .prop-row-rotate { flex-direction:column; align-items:stretch;
+        label { min-width:auto; }
+        .rotate-controls { display:flex; align-items:center; gap:6px;
+          input[type=range] { flex:1; accent-color:#3b82f6; }
+        }
+      }
+      .prop-row-size { flex-direction:column; align-items:stretch;
+        label { min-width:auto; }
+        .size-controls { display:flex; gap:12px;
+          .size-axis { display:flex; align-items:center; gap:4px;
+            span { font-size:11px; font-weight:700; color:#64748b; min-width:14px; }
+          }
+        }
+      }
+      .prop-btn { padding:5px 10px; border-radius:7px; border:1.5px solid #e2e8f0; background:#f8fafc; color:#0f172a; font-size:14px; font-weight:700; cursor:pointer; transition:all .15s; &:hover { border-color:#3b82f6; color:#3b82f6; background:#eff6ff; } }
       .delete-section-btn { padding:9px 16px; border-radius:8px; background:#fef2f2; color:#dc2626; border:1.5px solid #fecaca; font-weight:600; font-size:13px; cursor:pointer; transition:all .2s; &:hover { background:#fee2e2; } }
     }
   }
