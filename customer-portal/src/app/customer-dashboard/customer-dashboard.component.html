@@ -9,5 +9,29 @@
             <h2>Your Dashboard</h2>
             <p>This is where you'll find your personal shopping insights, cart status, and more.</p>
         </div>
+        <section class="carts-section">
+            <div class="section-header">
+                <h2>Your Active Carts</h2>
+                <button class="add-cart-btn" (click)="createNewCart()">+ New Cart</button>
+            </div>
+
+            <div class="carts-grid">
+                <div class="cart-card" *ngFor="let cart of activeCarts" (click)="openCart(cart.id)">
+                    <div class="cart-header">
+                        <span class="cart-icon">🛒</span>
+                        <span class="cart-status">Active</span>
+                    </div>
+                    <div class="cart-info">
+                        <h3>{{ cart.name }}</h3>
+                        <p>{{ cart.items }} items • {{ cart.lastActive }}</p>
+                    </div>
+                    <div class="cart-footer">
+                        <span>Continue Shopping</span>
+                        <span class="arrow">→</span>
+                    </div>
+                </div>
+
+            </div>
+        </section>
     </main>
 </div>

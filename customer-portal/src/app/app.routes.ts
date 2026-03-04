@@ -8,5 +8,10 @@ export const appRoutes: Route[] = [
                 (m) => m.CustomerDashboardComponent
             ),
     },
+    {
+        path: 'cart',
+        loadComponent: () =>
+            import('./cart/cart.component').then((m) => m.CartComponent),
+    },
     { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];
