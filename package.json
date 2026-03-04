@@ -4,7 +4,9 @@
   "license": "MIT",
   "scripts": {
     "start:demo": "nx serve web --configuration=demo",
-    "build:demo": "nx build web --configuration=demo"
+    "build:demo": "nx build web --configuration=demo",
+    "start:customer": "nx serve customer-portal",
+    "build:customer": "nx build customer-portal"
   },
   "private": true,
   "dependencies": {
