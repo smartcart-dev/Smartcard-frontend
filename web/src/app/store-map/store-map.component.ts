@@ -4,12 +4,18 @@
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Store } from '@ngrx/store';
+import { Subscription, firstValueFrom } from 'rxjs';
+import { take } from 'rxjs/operators';
 import {
   MapSection, MapFloor, StoreMapConfig, StoreMapSettings,
   SectionPreset, SECTION_PRESETS, WizardFloorSetup,
-  SaveMapResponse, LoadMapResponse, defaultSettings
+  SaveMapResponse, defaultSettings
 } from './store-config.interface';
 import { environment } from '../../environments/environment';
+import { ApiService } from '../services/apiService.service';
+import { loadStoreMap, saveStoreMapSuccess } from './state/store-map.actions';
+import { selectStoreMapConfig, selectStoreMapLoaded } from './state/store-map.selectors';
 
 // ── Mock products per section type ────────────────────────────────────────────
 const MOCK_PRODUCTS: Record<string, string[]> = {
@@ -44,9 +50,9 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
 
   private cdr    = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
-
-  // ── API config  (read from environment — zero hardcoding per client) ────────
-  private readonly apiBase = environment.apiBaseUrl;
+  private apiService = inject(ApiService);
+  private store  = inject(Store);
+  private storeSub?: Subscription;
   /** storeId + tenantId come from the JWT decoded at login. Fallback to env. */
   private get storeId():  string { return this.getFromJwt('storeId')  ?? (environment as any).storeId  ?? 'store_default'; }
   private get tenantId(): string { return this.getFromJwt('tenantId') ?? (environment as any).tenantId ?? 'tenant_default'; }
@@ -103,10 +109,29 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     this.boundResize = ()=>this.resizeCanvas();
     window.addEventListener('resize', this.boundResize);
-    // Auto-load map from API on start (if storeId is known)
-    this.loadMapFromApi().catch(()=>{}); // silent — wizard shows if no data
+
+    // Subscribe to NgRx store for map config
+    this.storeSub = this.store.select(selectStoreMapConfig).subscribe((cfg) => {
+      if (cfg) {
+        this.ngZone.run(() => {
+          this.config = cfg;
+          this.activeFloorIndex = 0;
+          this.wizardActive = false;
+          this.cdr.detectChanges();
+          setTimeout(() => this.initCanvas(), 60);
+        });
+      }
+    });
+
+    // Check if already loaded in NgRx store; if not, dispatch load action
+    this.store.select(selectStoreMapLoaded).pipe(take(1)).subscribe((loaded) => {
+      if (!loaded) {
+        this.store.dispatch(loadStoreMap({ tenantId: this.tenantId, storeId: this.storeId }));
+      }
+    });
   }
   ngOnDestroy(): void {
+    this.storeSub?.unsubscribe();
     if (this.animFrame) cancelAnimationFrame(this.animFrame);
     window.removeEventListener('resize', this.boundResize);
   }
@@ -122,27 +147,7 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     } catch { return null; }
   }
 
-  // ── API: Load ─────────────────────────────────────────────────────────────
-  async loadMapFromApi(): Promise<void> {
-    try {
-      const res = await fetch(`${this.apiBase}/api/v1/masters/store_map`, {
-        headers: this.buildHeaders(),
-      });
-      if (!res.ok) return; // no map yet → show wizard
-      const body: LoadMapResponse = await res.json();
-      if (body.success && body.data) {
-        this.ngZone.run(()=>{
-          this.config = body.data!;
-          this.activeFloorIndex = 0;
-          this.wizardActive = false;
-          this.cdr.detectChanges();
-          setTimeout(()=>this.initCanvas(), 60);
-        });
-      }
-    } catch {
-      // Network unavailable → silent fallback to wizard
-    }
-  }
+
 
   // ── API: Save ─────────────────────────────────────────────────────────────
   async saveMap(): Promise<void> {
@@ -163,15 +168,14 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
     localStorage.setItem(`smartcart_map_${this.storeId}`, JSON.stringify(payload));
 
     try {
-      const res = await fetch(`${this.apiBase}/api/v1/masters/store_map`, {
-        method:  'POST',
-        headers: this.buildHeaders(),
-        body:    JSON.stringify(payload),
-      });
-      const body: SaveMapResponse = await res.json();
+      const body = await firstValueFrom(
+        this.apiService.post<SaveMapResponse>('/v1/masters/store_map', payload)
+      );
 
       if (body.success) {
         if (body.version) this.config.version = body.version;
+        // Update NgRx store with latest config
+        this.store.dispatch(saveStoreMapSuccess({ config: { ...this.config } }));
         this.showToast('saved', `✅ Saved — v${body.version ?? '?'}`);
       } else {
         this.showToast('error', `❌ ${body.error?.message ?? 'Save failed'}`);
@@ -180,17 +184,6 @@ export class StoreMapComponent implements AfterViewInit, OnDestroy {
       // Offline: already saved to localStorage — show offline notice
       this.showToast('saved', '💾 Saved locally (offline)');
     }
-  }
-
-  private buildHeaders(): Record<string, string> {
-    const token = localStorage.getItem('auth_token') ?? '';
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '',
-      'x-tenant-id':  this.tenantId,
-      'x-store-id':   this.storeId,
-      'x-api-version':'1',
-    };
   }
 
   private showToast(status: 'saved'|'error', msg: string): void {

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
@@ -10,8 +10,7 @@ import { environment } from '../../environments/environment';
 export class ApiService {
 
     private readonly baseUrl = environment.apiBaseUrl;
-
-    constructor(private http: HttpClient) { }
+    private readonly http = inject(HttpClient);
 
     private createHeaders(customHeaders?: { [key: string]: string }): HttpHeaders {
         return new HttpHeaders({
@@ -21,9 +20,8 @@ export class ApiService {
         });
     }
 
-    get<T>(endpoint: string, params?: any): Observable<T> {
+    get<T>(endpoint: string, params?: Record<string, string | number | boolean>, customHeaders?: { [key: string]: string }): Observable<T> {
         let httpParams = new HttpParams();
-        // ... (existing param logic)
         if (params) {
             Object.keys(params).forEach(key => {
                 if (params[key] !== null && params[key] !== undefined) {
@@ -34,32 +32,32 @@ export class ApiService {
 
         const fullUrl = `${this.baseUrl}${endpoint}`;
         return this.http.get<T>(fullUrl, {
-            headers: this.createHeaders(),
+            headers: this.createHeaders(customHeaders),
             params: httpParams
         }).pipe(
             catchError(this.handleError)
         );
     }
 
-    post<T>(endpoint: string, body: any): Observable<T> {
+    post<T>(endpoint: string, body: object, customHeaders?: { [key: string]: string }): Observable<T> {
         return this.http.post<T>(`${this.baseUrl}${endpoint}`, body, {
-            headers: this.createHeaders()
+            headers: this.createHeaders(customHeaders)
         }).pipe(
             catchError(this.handleError)
         );
     }
 
-    put<T>(endpoint: string, body: any): Observable<T> {
+    put<T>(endpoint: string, body: object, customHeaders?: { [key: string]: string }): Observable<T> {
         return this.http.put<T>(`${this.baseUrl}${endpoint}`, body, {
-            headers: this.createHeaders()
+            headers: this.createHeaders(customHeaders)
         }).pipe(
             catchError(this.handleError)
         );
     }
 
-    delete<T>(endpoint: string): Observable<T> {
+    delete<T>(endpoint: string, customHeaders?: { [key: string]: string }): Observable<T> {
         return this.http.delete<T>(`${this.baseUrl}${endpoint}`, {
-            headers: this.createHeaders()
+            headers: this.createHeaders(customHeaders)
         }).pipe(
             catchError(this.handleError)
         );
