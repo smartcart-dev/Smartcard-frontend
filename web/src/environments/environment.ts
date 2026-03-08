@@ -2,7 +2,7 @@ export const environment = {
   production: false,
   client: 'default',
   brandName: 'D-Mart Business',
-  apiBaseUrl: 'http://localhost:3000/api',
+  apiBaseUrl: 'http://localhost:3000/api/v1',
 };
 
 

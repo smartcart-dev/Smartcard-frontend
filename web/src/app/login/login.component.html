@@ -1,7 +1,7 @@
 <div class="login-container">
   <div class="blob shape-1"></div>
   <div class="blob shape-2"></div>
-  
+
   <div class="login-card">
     <div class="brand-section">
       <div class="logo-placeholder">
@@ -17,38 +17,72 @@
         <p>Login to manage your carts, products, and analytics.</p>
       </div>
 
+      @if (errorMessage) {
+        <div class="error-alert">
+          {{ errorMessage }}
+        </div>
+      }
+
       <div class="input-group">
         <label for="email">Email Address</label>
-        <input 
-          id="email" 
-          type="email" 
-          formControlName="email" 
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
           placeholder="admin@example.com"
-          [class.invalid]="loginForm.get('email')?.invalid && loginForm.get('email')?.touched"
-        >
+          [class.invalid]="
+            loginForm.get('email')?.invalid && loginForm.get('email')?.touched
+          "
+        />
+        @if (loginForm.get('email')?.invalid && loginForm.get('email')?.touched) {
+          <span
+            class="error-text"
+          >
+            Valid email is required
+          </span>
+        }
       </div>
 
       <div class="input-group">
         <label for="password">Password</label>
-        <input 
-          id="password" 
-          type="password" 
-          formControlName="password" 
+        <input
+          id="password"
+          type="password"
+          formControlName="password"
           placeholder="••••••••"
-          [class.invalid]="loginForm.get('password')?.invalid && loginForm.get('password')?.touched"
-        >
+          [class.invalid]="
+            loginForm.get('password')?.invalid &&
+            loginForm.get('password')?.touched
+          "
+        />
+        @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
+          <span
+            class="error-text"
+          >
+            Password is required
+          </span>
+        }
       </div>
 
       <div class="form-actions">
         <label class="remember-me">
-          <input type="checkbox">
+          <input type="checkbox" />
           <span>Remember me</span>
         </label>
         <a href="#" class="forgot-password">Forgot password?</a>
       </div>
 
-      <button type="submit" class="submit-btn" [disabled]="loginForm.invalid">
-        Sign In to Dashboard
+      <button
+        type="submit"
+        class="submit-btn"
+        [disabled]="loginForm.invalid || isLoading"
+      >
+        @if (!isLoading) {
+          <span>Sign In to Dashboard</span>
+        }
+        @if (isLoading) {
+          <span class="spinner"></span>
+        }
       </button>
     </form>
   </div>
