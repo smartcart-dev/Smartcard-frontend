@@ -83,7 +83,7 @@ export class UsersComponent implements OnInit {
 
     fetchUsers(): void {
         this.loading = true;
-        this.apiService.get<any>('/v1/users', { page: 1, limit: 100 }).subscribe({
+        this.apiService.get<any>('/users', { page: 1, limit: 100 }).subscribe({
             next: (response) => {
                 this.users = response.data || [];
                 this.loading = false;
@@ -101,3 +101,4 @@ export class UsersComponent implements OnInit {
         this.router.navigate(['/app/users/add']);
     }
 }
+

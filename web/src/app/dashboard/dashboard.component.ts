@@ -21,7 +21,7 @@ export class DashboardComponent implements OnInit {
   }
 
   private fetchActiveUsers(): void {
-    this.apiService.get<any>('/v1/users/count').subscribe({
+    this.apiService.get<any>('/users/count').subscribe({
       next: (response) => {
         this.activeUsersCount = response.totalUsers || 0;
         this.cdr.detectChanges();

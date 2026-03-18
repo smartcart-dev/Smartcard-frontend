@@ -1,343 +1,155 @@
 <div class="products-root">
-
-  <!-- ══ Toast ══ -->
-  <div class="p-toast" [class.show]="toast" [class.error]="toastType==='error'">
-    <span class="toast-icon">{{ toastType==='success' ? '✓' : '✕' }}</span>
-    {{ toast }}
+  <!-- Toast Information -->
+  <div class="p-toast" [class.show]="toast" [class.error]="toastType === 'error'">
+    <span class="toast-icon">{{ toastType === 'success' ? '✨' : '⚠️' }}</span>
+    <span class="toast-msg">{{ toast }}</span>
   </div>
 
-  <!-- ══ Drawer Backdrop ══ -->
-  <div class="drawer-backdrop" [class.show]="showAddDrawer" (click)="closeDrawer()"></div>
+  <!-- Page Header -->
+  <header class="page-header">
+    <div class="page-title-row">
+      <div class="page-title-area">
+        <span class="page-title-badge">SMART INVENTORY</span>
+        <h1 class="page-title">Digital Products</h1>
+        <p class="page-subtitle">Manage store inventory across sections and categories</p>
+      </div>
 
-  <!-- ══ Add / Edit Drawer ══ -->
+      <button class="add-btn" (click)="openAdd()">
+        <span class="add-btn-icon">+</span>
+        <span class="add-btn-text">Add Product</span>
+        <div class="add-btn-glow"></div>
+      </button>
+    </div>
+  </header>
+
+  <!-- Products Content -->
+  <main class="products-content">
+    <div *ngIf="loading && !sections.length" class="loading-state">
+      <div class="spinner"></div>
+      <p>Fetching inventory data...</p>
+    </div>
+
+    <div *ngIf="!loading && !sections.length" class="empty-state">
+      <div class="empty-blob"></div>
+      <span class="empty-icon">📦</span>
+      <h3>No Products Found</h3>
+      <p>Start by adding your first product to the inventory.</p>
+      <button class="add-btn" (click)="openAdd()">Add Your First Product</button>
+    </div>
+
+    <!-- Grouped Sections -->
+    <div *ngFor="let sec of sections; trackBy: trackBySection" class="section-group">
+      <div class="section-header" (click)="toggleSection(sec)">
+        <div class="sec-left">
+          <span class="sec-chevron" [class.open]="sec.open">▸</span>
+          <span class="sec-icon">{{ getSectionIcon(sec.sectionName) }}</span>
+          <h2 class="sec-name">{{ sec.sectionName }}</h2>
+        </div>
+        <div class="sec-right">
+          <span class="sec-badge">{{ sec.categories.length }} Categories</span>
+        </div>
+      </div>
+
+      <div class="section-body" [class.open]="sec.open">
+        <!-- Nested Categories -->
+        <div *ngFor="let cat of sec.categories; trackBy: trackByCategory" class="category-group">
+          <div class="category-header" (click)="toggleCategory(cat)">
+            <div class="cat-left">
+              <span class="cat-chevron" [class.open]="cat.open">▾</span>
+              <h3 class="cat-name">{{ cat.categoryName }}</h3>
+            </div>
+            <div class="cat-right">
+              <span class="cat-count">{{ cat.products.length }} products</span>
+            </div>
+          </div>
+
+          <div class="category-products" [class.open]="cat.open">
+            <div class="product-grid">
+              <div *ngFor="let p of cat.products; trackBy: trackByProduct" class="product-card">
+                <div class="card-image">
+                  <img *ngIf="p.imageUrl" [src]="p.imageUrl" [alt]="p.name">
+                  <div *ngIf="!p.imageUrl" class="no-image">📦</div>
+                </div>
+                <div class="product-info">
+                  <div class="product-header">
+                    <span class="product-cat">{{ p.category }}</span>
+                    <h4 class="product-name">{{ p.name }}</h4>
+                  </div>
+                  <div class="product-footer">
+                    <div class="price-box">
+                      <span class="price-lbl">Price</span>
+                      <span class="price-val">{{ formatPrice(p.price) }}</span>
+                    </div>
+                    <div class="stock-box" [class.low]="p.quantity < 10" [class.out]="p.quantity === 0">
+                      <span class="stock-lbl">Stock</span>
+                      <span class="stock-val">{{ p.quantity }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add Drawer -->
+  <div class="drawer-backdrop" [class.show]="showAddDrawer" (click)="closeDrawer()"></div>
   <aside class="add-drawer" [class.open]="showAddDrawer">
     <div class="drawer-header">
       <div class="drawer-header-left">
-        <div class="drawer-header-icon">{{ editingProduct ? '✏️' : '✦' }}</div>
-        <div>
-          <h2>{{ editingProduct ? 'Edit Product' : 'Add New Product' }}</h2>
-          <p class="drawer-subtitle">{{ editingProduct ? 'Update product details' : 'Add a product to your inventory' }}</p>
+        <div class="drawer-header-icon">✨</div>
+        <div class="drawer-header-text">
+          <h2>Add New Product</h2>
+          <p class="drawer-subtitle">Initialize a new item in the smart inventory</p>
         </div>
       </div>
       <button class="drawer-close" (click)="closeDrawer()">✕</button>
     </div>
-    <div class="drawer-body">
-      <!-- Icon picker -->
-      <div class="form-group">
-        <label>Choose Icon</label>
-        <div class="icon-preview-wrap">
-          <div class="icon-preview">{{ form.icon }}</div>
-          <span class="icon-preview-hint">Click an emoji below</span>
-        </div>
-        <div class="icon-grid">
-          <button *ngFor="let ic of quickIcons" class="icon-chip" [class.active]="form.icon===ic"
-                  (click)="form.icon=ic">{{ ic }}</button>
-        </div>
-      </div>
 
-      <div class="form-divider"></div>
+    <div class="drawer-body">
+      <div class="form-group">
+        <label>Product Name <span class="req">*</span></label>
+        <input type="text" [(ngModel)]="form.name" placeholder="e.g. Organic Milk">
+      </div>
 
       <div class="form-row">
         <div class="form-group flex-1">
-          <label>Product Name <span class="req">*</span></label>
-          <input type="text" [(ngModel)]="form.name" placeholder="e.g. Amul Milk 1L"/>
+          <label>Section <span class="req">*</span></label>
+          <input type="text" [(ngModel)]="form.section" placeholder="e.g. A1">
         </div>
-        <div class="form-group w120">
-          <label>SKU</label>
-          <input type="text" [(ngModel)]="form.sku" placeholder="DAI001"/>
+        <div class="form-group flex-1">
+          <label>Category <span class="req">*</span></label>
+          <input type="text" [(ngModel)]="form.category" placeholder="e.g. Dairy">
         </div>
       </div>
-      <div class="form-group">
-        <label>Description</label>
-        <textarea [(ngModel)]="form.description" placeholder="Short product description…" rows="2"></textarea>
-      </div>
+
       <div class="form-row">
         <div class="form-group flex-1">
           <label>Price (₹) <span class="req">*</span></label>
-          <div class="input-prefix-wrap">
-            <span class="input-prefix">₹</span>
-            <input type="number" [(ngModel)]="form.price" min="0" placeholder="0" class="with-prefix"/>
-          </div>
+          <input type="number" [(ngModel)]="form.price" placeholder="0.00">
         </div>
         <div class="form-group flex-1">
-          <label>Quantity <span class="req">*</span></label>
-          <input type="number" [(ngModel)]="form.quantity" min="0" placeholder="0"/>
-        </div>
-        <div class="form-group w110">
-          <label>Unit</label>
-          <select [(ngModel)]="form.unit">
-            <option *ngFor="let u of units" [value]="u">{{ u }}</option>
-          </select>
+          <label>Initial Stock <span class="req">*</span></label>
+          <input type="number" [(ngModel)]="form.quantity" placeholder="0">
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group flex-1">
-          <label>Floor & Section <span class="req">*</span></label>
-          <select [(ngModel)]="form.sectionKey">
-            <option value="">— Select Section —</option>
-            <option *ngFor="let s of availableSections" [value]="s.floorId+'|'+s.sectionId">
-              {{ s.floorName }} › {{ s.sectionName }}
-            </option>
-          </select>
-        </div>
-        <div class="form-group w140">
-          <label>Low Stock Alert</label>
-          <input type="number" [(ngModel)]="form.lowStockThreshold" min="0" placeholder="10"/>
-        </div>
+
+        <input type="text" [(ngModel)]="form.imageUrl" placeholder="https://example.com/image.jpg">
+
+      <div class="form-group">
+        <label>Description</label>
+        <textarea rows="3" [(ngModel)]="form.description" placeholder="A brief overview of the product..."></textarea>
       </div>
     </div>
+
     <div class="drawer-footer">
-      <button class="btn-cancel" (click)="closeDrawer()">Cancel</button>
-      <button class="btn-save" (click)="saveProduct()" [disabled]="!form.name.trim()||!form.sectionKey">
-        <span class="btn-save-icon">{{ editingProduct ? '✓' : '+' }}</span>
-        {{ editingProduct ? 'Update Product' : 'Add Product' }}
+      <button class="btn-cancel" (click)="closeDrawer()">Discard</button>
+      <button class="btn-save" [disabled]="!form.name || !form.section || loading" (click)="saveProduct()">
+        <span *ngIf="!loading">Initialize Product</span>
+        <span *ngIf="loading">Saving...</span>
       </button>
     </div>
   </aside>
-
-  <!-- ══ PAGE HEADER ══ -->
-  <div class="page-header">
-    <div class="page-title-row">
-      <div class="page-title-area">
-        <div class="page-title-badge">INVENTORY</div>
-        <h1 class="page-title">Products</h1>
-        <p class="page-subtitle">Manage your store inventory by floor &amp; section</p>
-      </div>
-      <button class="add-btn" (click)="openAdd()">
-        <span class="add-btn-icon">+</span>
-        <span>Add Product</span>
-        <div class="add-btn-glow"></div>
-      </button>
-    </div>
-
-    <!-- Stats row -->
-    <div class="stats-row">
-      <div class="stat-card stat-blue">
-        <div class="stat-icon">📦</div>
-        <div class="stat-body">
-          <div class="stat-val">{{ totalProducts }}</div>
-          <div class="stat-lbl">Total Products</div>
-        </div>
-        <div class="stat-bg-glow"></div>
-      </div>
-      <div class="stat-card stat-green">
-        <div class="stat-icon">💰</div>
-        <div class="stat-body">
-          <div class="stat-val">{{ formatValue(totalValue) }}</div>
-          <div class="stat-lbl">Total Value</div>
-        </div>
-        <div class="stat-bg-glow"></div>
-      </div>
-      <div class="stat-card" [class.stat-amber]="lowStockCount>0" [class.stat-neutral]="lowStockCount===0">
-        <div class="stat-icon">⚠️</div>
-        <div class="stat-body">
-          <div class="stat-val">{{ lowStockCount }}</div>
-          <div class="stat-lbl">Low Stock</div>
-        </div>
-        <div class="stat-bg-glow"></div>
-      </div>
-      <div class="stat-card" [class.stat-red]="outOfStock>0" [class.stat-neutral]="outOfStock===0">
-        <div class="stat-icon">🚫</div>
-        <div class="stat-body">
-          <div class="stat-val">{{ outOfStock }}</div>
-          <div class="stat-lbl">Out of Stock</div>
-        </div>
-        <div class="stat-bg-glow"></div>
-      </div>
-    </div>
-
-    <!-- Controls row -->
-    <div class="controls-row">
-      <!-- Search -->
-      <div class="search-wrap">
-        <svg class="search-icon-svg" viewBox="0 0 18 18" fill="none" width="15" height="15">
-          <circle cx="7.5" cy="7.5" r="5" stroke="currentColor" stroke-width="1.8"/>
-          <path d="M12 12L16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        </svg>
-        <input type="text" class="search-input" [(ngModel)]="searchQuery" placeholder="Search…"/>
-        <button *ngIf="searchQuery" class="clear-search" (click)="searchQuery=''">✕</button>
-      </div>
-      <!-- Floor Filter -->
-      <div class="floor-tabs">
-        <button *ngFor="let ft of floorTabs" class="floor-tab" [class.active]="filterFloorId===ft.id"
-                (click)="filterFloorId=ft.id">{{ ft.name }}</button>
-      </div>
-      <!-- Sort + view toggles grouped right -->
-      <div class="controls-right">
-        <select class="sort-select" [(ngModel)]="sortBy">
-          <option value="name">A – Z</option>
-          <option value="price">Price ↓</option>
-          <option value="qty">Stock ↑</option>
-        </select>
-        <div class="view-toggle">
-          <button [class.active]="viewMode==='grid'" (click)="viewMode='grid'" title="Grid view">
-            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-              <rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/>
-              <rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/>
-            </svg>
-          </button>
-          <button [class.active]="viewMode==='list'" (click)="viewMode='list'" title="List view">
-            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-              <rect x="2" y="3" width="16" height="2.5" rx="1.25"/>
-              <rect x="2" y="8.75" width="16" height="2.5" rx="1.25"/>
-              <rect x="2" y="14.5" width="16" height="2.5" rx="1.25"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ CONTENT ══ -->
-  <div class="products-content">
-
-    <!-- Empty state -->
-    <div class="empty-state" *ngIf="filteredFloors.length===0">
-      <div class="empty-blob"></div>
-      <div class="empty-icon">📭</div>
-      <h3>No products found</h3>
-      <p>{{ searchQuery ? 'Try a different search term or clear the filter' : 'Add your first product to get started' }}</p>
-      <button class="add-btn" (click)="openAdd()">
-        <span class="add-btn-icon">+</span> Add Product
-        <div class="add-btn-glow"></div>
-      </button>
-    </div>
-
-    <!-- Floor groups -->
-    <div class="floor-group" *ngFor="let floor of filteredFloors; trackBy: trackByFloor">
-      <div class="floor-header" (click)="toggleFloor(floor)">
-        <div class="floor-left">
-          <span class="floor-chevron" [class.open]="floor.open">
-            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-              <path d="M7 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-          </span>
-          <span class="floor-emoji">🏢</span>
-          <span class="floor-name">{{ floor.floorName }}</span>
-        </div>
-        <div class="floor-right">
-          <span class="floor-sec-pill">{{ floor.sections.length }} sections</span>
-          <span class="floor-prod-pill">{{ getFloorItemCount(floor) }} items</span>
-        </div>
-      </div>
-
-      <div class="floor-body" [class.open]="floor.open">
-        <!-- Section groups -->
-        <div class="section-group" *ngFor="let section of floor.sections; let last=last; trackBy: trackBySection" [class.last]="last">
-          <div class="section-header" (click)="toggleSection(section)"
-               [style.--sec-color]="section.sectionColor">
-            <div class="sec-left">
-              <span class="sec-chevron" [class.open]="section.open">
-                <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-                  <path d="M7 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                </svg>
-              </span>
-              <span class="sec-color-dot" [style.background]="section.sectionColor"></span>
-              <span class="sec-icon">{{ section.sectionIcon }}</span>
-              <span class="sec-name">{{ section.sectionName }}</span>
-            </div>
-            <div class="sec-right">
-              <span class="sec-items-badge" [style.background]="section.sectionColor+'22'" [style.color]="section.sectionColor">
-                {{ section.products.length }} items
-              </span>
-            </div>
-          </div>
-
-          <!-- Products Grid / List -->
-          <div class="section-products" [class.open]="section.open">
-
-            <!-- GRID VIEW -->
-            <ng-container *ngIf="viewMode==='grid'">
-              <div class="product-grid">
-                <div class="product-card" *ngFor="let p of section.products; trackBy: trackByProduct"
-                     [class.low-stock]="isLowStock(p)" [class.out-of-stock]="isOutOfStock(p)"
-                     [style.--sec-color]="p.sectionColor">
-                  <!-- Top accent bar -->
-                  <div class="card-accent-bar" [style.background]="'linear-gradient(90deg,'+p.sectionColor+','+p.sectionColor+'88)'"></div>
-
-                  <!-- Status badges -->
-                  <div class="card-badge out-badge" *ngIf="isOutOfStock(p)">OUT OF STOCK</div>
-                  <div class="card-badge low-badge" *ngIf="isLowStock(p)">⚠ LOW</div>
-
-                  <!-- Action buttons (hover reveal) -->
-                  <div class="card-actions">
-                    <button class="card-action-btn edit-btn" (click)="openEdit(p)" title="Edit">
-                      <svg viewBox="0 0 20 20" fill="none" width="13" height="13">
-                        <path d="M14.5 2.5l3 3L6 17H3v-3L14.5 2.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                      </svg>
-                    </button>
-                    <button class="card-action-btn del-btn" (click)="deleteProduct(p.id)" title="Delete">
-                      <svg viewBox="0 0 20 20" fill="none" width="13" height="13">
-                        <path d="M5 7h10l-1 9H6L5 7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                        <path d="M3 7h14M8 7V4h4v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                      </svg>
-                    </button>
-                  </div>
-
-                  <!-- Product emoji icon -->
-                  <div class="product-icon-wrap">
-                    <div class="product-icon">{{ p.icon }}</div>
-                  </div>
-
-                  <!-- Info -->
-                  <div class="product-info">
-                    <div class="product-name" [title]="p.name">{{ p.name }}</div>
-                    <div class="product-sku" *ngIf="p.sku">{{ p.sku }}</div>
-                    <div class="product-price">
-                      {{ formatPrice(p.price) }}<span class="product-unit"> / {{ p.unit }}</span>
-                    </div>
-                  </div>
-
-                  <!-- Qty stepper -->
-                  <div class="qty-stepper">
-                    <button class="qty-btn minus" (click)="changeQty(p,-1)" [disabled]="p.quantity===0">−</button>
-                    <input type="number" class="qty-val" [value]="p.quantity" min="0"
-                           (change)="onQtyInput(p,$event)" (blur)="onQtyInput(p,$event)"/>
-                    <button class="qty-btn plus" (click)="changeQty(p,1)">+</button>
-                  </div>
-                  <div class="qty-unit-label">{{ p.unit }}</div>
-                </div>
-              </div>
-            </ng-container>
-
-            <!-- LIST VIEW -->
-            <ng-container *ngIf="viewMode==='list'">
-              <div class="product-list-row" *ngFor="let p of section.products; trackBy: trackByProduct"
-                   [class.low-stock]="isLowStock(p)" [class.out-of-stock]="isOutOfStock(p)"
-                   [style.--sec-color]="p.sectionColor">
-                <div class="list-icon-wrap">{{ p.icon }}</div>
-                <div class="list-info">
-                  <span class="list-name">{{ p.name }}</span>
-                  <span class="list-sku" *ngIf="p.sku">{{ p.sku }}</span>
-                </div>
-                <div class="list-price">{{ formatPrice(p.price) }}<span class="list-unit"> / {{ p.unit }}</span></div>
-                <div class="list-qty-wrap">
-                  <button class="qty-btn minus sm" (click)="changeQty(p,-1)" [disabled]="p.quantity===0">−</button>
-                  <input type="number" class="qty-val sm" [value]="p.quantity" min="0" (change)="onQtyInput(p,$event)"/>
-                  <button class="qty-btn plus sm" (click)="changeQty(p,1)">+</button>
-                  <span class="qty-unit-lbl">{{ p.unit }}</span>
-                </div>
-                <span class="list-status-pill" [class.pill-low]="isLowStock(p)" [class.pill-out]="isOutOfStock(p)" [class.pill-ok]="!isLowStock(p)&&!isOutOfStock(p)">
-                  {{ isOutOfStock(p) ? '✕ Out' : isLowStock(p) ? '⚠ Low' : '✓ OK' }}
-                </span>
-                <div class="list-actions">
-                  <button class="card-action-btn edit-btn" (click)="openEdit(p)">
-                    <svg viewBox="0 0 20 20" fill="none" width="13" height="13">
-                      <path d="M14.5 2.5l3 3L6 17H3v-3L14.5 2.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
-                  <button class="card-action-btn del-btn" (click)="deleteProduct(p.id)">
-                    <svg viewBox="0 0 20 20" fill="none" width="13" height="13">
-                      <path d="M5 7h10l-1 9H6L5 7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                      <path d="M3 7h14M8 7V4h4v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </ng-container>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
