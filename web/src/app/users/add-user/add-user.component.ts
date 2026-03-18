@@ -35,7 +35,7 @@ export class AddUserComponent {
                 email: this.userForm.value.email
             };
 
-            this.apiService.post<any>('/v1/signup', payload).subscribe({
+            this.apiService.post<any>('/signup', payload).subscribe({
                 next: () => {
                     this.loading = false;
                     this.goBack();
@@ -53,3 +53,4 @@ export class AddUserComponent {
         this.router.navigate(['/app/users']);
     }
 }
+
