@@ -1,114 +1,93 @@
-import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { ZXingScannerModule } from '@zxing/ngx-scanner';
-import { BarcodeFormat } from '@zxing/library';
-
-interface CartItem {
-    id: string;
-    name: string;
-    price: number;
-    quantity: number;
-    icon: string;
-    sku: string;
-}
+import Quagga from '@ericblade/quagga2';
 
 @Component({
     selector: 'app-cart',
     standalone: true,
-    imports: [CommonModule, ZXingScannerModule],
+    imports: [CommonModule],
     templateUrl: './cart.component.html',
     styleUrl: './cart.component.scss',
 })
-export class CartComponent implements OnInit {
+export class CartComponent implements OnDestroy {
     private cdr = inject(ChangeDetectorRef);
     private router = inject(Router);
 
-    cartItems: CartItem[] = [];
     showScanner = false;
     scannedCode = '';
+    errorMessage = '';
 
-    allowedFormats = [
-        BarcodeFormat.QR_CODE,
-        BarcodeFormat.EAN_13,
-        BarcodeFormat.CODE_128,
-        BarcodeFormat.DATA_MATRIX
-    ];
-
-    get totalAmount(): number {
-        return this.cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-    }
-
-    ngOnInit() {
-        // Load cart from session/local storage if exists
-        const savedCart = localStorage.getItem('smartcart_customer_cart');
-        if (savedCart) {
-            this.cartItems = JSON.parse(savedCart);
-        }
+    ngOnDestroy() {
+        this.stopScanner();
     }
 
     goBack() {
+        this.stopScanner();
         this.router.navigate(['/dashboard']);
     }
 
     toggleScanner() {
         this.showScanner = !this.showScanner;
+        if (this.showScanner) {
+            this.scannedCode = '';
+            this.errorMessage = '';
+            // Delay initialization slightly to ensure the DOM element is present
+            setTimeout(() => this.initScanner(), 100);
+        } else {
+            this.stopScanner();
+        }
+    }
+
+    private initScanner() {
+        Quagga.init({
+            inputStream: {
+                type: "LiveStream",
+                target: document.querySelector('#interactive') as HTMLElement,
+                constraints: {
+                    facingMode: 'environment',
+                    width: { min: 640 },
+                    height: { min: 480 },
+                    aspectRatio: { min: 1, max: 2 }
+                },
+                area: { // defines rectangle of the detection
+                    top: '35%',    // 30% scanning strip in the middle
+                    right: '7.5%', // 85% width
+                    left: '7.5%',
+                    bottom: '35%'
+                },
+            },
+            decoder: {
+                readers: ['ean_reader', 'code_128_reader', 'code_39_reader']
+            },
+            locate: true,
+        }, (err) => {
+            if (err) {
+                console.error("Quagga initialization failed: ", err);
+                this.errorMessage = `Camera error: ${err.name || err}`;
+                this.cdr.detectChanges();
+                return;
+            }
+            Quagga.start();
+        });
+
+        Quagga.onDetected((res) => {
+            if (res?.codeResult?.code) {
+                this.onCodeResult(res.codeResult.code);
+            }
+        });
+    }
+
+    private stopScanner() {
+        if (this.showScanner || (Quagga as any).canvas) {
+            Quagga.stop();
+        }
     }
 
     onCodeResult(resultString: string) {
         this.scannedCode = resultString;
-        this.addItemBySku(resultString);
-    }
-
-    addItemBySku(sku: string) {
-        // Simulate finding a product from the inventory
-        const products = JSON.parse(localStorage.getItem('smartcart_products') || '[]');
-        const product = products.find((p: any) => p.sku === sku || p.id === sku);
-
-        if (product) {
-            const existing = this.cartItems.find(item => item.id === product.id);
-            if (existing) {
-                existing.quantity++;
-            } else {
-                this.cartItems.push({
-                    id: product.id,
-                    name: product.name,
-                    price: product.price,
-                    quantity: 1,
-                    icon: product.icon || '📦',
-                    sku: product.sku || ''
-                });
-            }
-            this.saveCart();
-            this.showScanner = false;
-        } else {
-            console.warn('Product not found: ' + sku);
-            // Optional: show toast or brief error
-        }
-    }
-
-    removeFromCart(id: string) {
-        this.cartItems = this.cartItems.filter(item => item.id !== id);
-        this.saveCart();
-    }
-
-    updateQuantity(id: string, delta: number) {
-        const item = this.cartItems.find(i => i.id === id);
-        if (item) {
-            item.quantity = Math.max(1, item.quantity + delta);
-            this.saveCart();
-        }
-    }
-
-    private saveCart() {
-        localStorage.setItem('smartcart_customer_cart', JSON.stringify(this.cartItems));
+        this.showScanner = false;
+        this.stopScanner();
         this.cdr.detectChanges();
-    }
-
-    checkout() {
-        alert('Proceeding to checkout: ₹' + this.totalAmount);
-        // Clear cart after checkout
-        this.cartItems = [];
-        this.saveCart();
     }
 }

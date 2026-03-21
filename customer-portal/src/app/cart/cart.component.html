@@ -3,76 +3,49 @@
         <button class="back-btn" (click)="goBack()">
             <span class="icon">←</span>
         </button>
-        <h1>My Shopping Cart</h1>
-        <div class="header-actions">
-            <button class="scan-btn" (click)="toggleScanner()">
-                <span class="icon">📷</span> Scan Barcode
-            </button>
-        </div>
+        <h1>Barcode Scanner</h1>
     </header>
 
     <main class="cart-content">
+        <!-- Scanner Overlay -->
         <div *ngIf="showScanner" class="scanner-overlay">
             <div class="scanner-box">
                 <div class="scanner-wrapper">
-                    <zxing-scanner [formats]="allowedFormats" (scanSuccess)="onCodeResult($event)">
-                    </zxing-scanner>
-                    <div class="scanner-guide">
-                        <div class="guide-line"></div>
+                    <div id="interactive" class="viewport">
+                        <!-- QuaggaJS will populate this element -->
+                    </div>
+                    <div class="scanner-viewfinder">
+                        <div class="focus-area">
+                            <div class="scan-line"></div>
+                            <div class="focus-corners"></div>
+                        </div>
+                    </div>
+                    <div *ngIf="errorMessage" class="error-overlay">
+                        {{ errorMessage }}
                     </div>
                 </div>
                 <div class="scanner-actions">
-                    <p>Scanning for products...</p>
-                    <button class="cancel-btn" (click)="toggleScanner()">Close Scanner</button>
+                    <p>Align the barcode within the box</p>
+                    <button class="cancel-btn" (click)="toggleScanner()">Cancel</button>
                 </div>
             </div>
         </div>
 
-        <div class="items-list" *ngIf="cartItems.length > 0; else emptyCart">
-            <div class="cart-item" *ngFor="let item of cartItems">
-                <div class="item-icon">{{ item.icon }}</div>
-                <div class="item-details">
-                    <h3>{{ item.name }}</h3>
-                    <p class="sku">SKU: {{ item.sku }}</p>
-                    <p class="price">₹{{ item.price }}</p>
-                </div>
-                <div class="item-actions">
-                    <div class="qty-control">
-                        <button (click)="updateQuantity(item.id, -1)">-</button>
-                        <span>{{ item.quantity }}</span>
-                        <button (click)="updateQuantity(item.id, 1)">+</button>
-                    </div>
-                    <button class="remove-btn" (click)="removeFromCart(item.id)">🗑️</button>
-                </div>
-                <div class="item-total">
-                    ₹{{ item.price * item.quantity }}
-                </div>
+        <!-- Scanned Value Display -->
+        <div class="display-container">
+            <button class="main-scan-btn" (click)="toggleScanner()" *ngIf="!showScanner">
+                <span class="icon">📷</span> Scan Now
+            </button>
+
+            <div *ngIf="scannedCode && !showScanner" class="value-card">
+                <span class="label">Scanned Barcode Value:</span>
+                <span class="value">{{ scannedCode }}</span>
+                <button class="clear-btn" (click)="scannedCode = ''">Clear</button>
+            </div>
+
+            <div *ngIf="!scannedCode && !showScanner" class="empty-state">
+                <p>No barcode scanned yet.</p>
             </div>
         </div>
-
-        <ng-template #emptyCart>
-            <div class="empty-state">
-                <div class="empty-icon">🛒</div>
-                <h2>Your cart is empty</h2>
-                <p>Start scanning items to add them to your cart!</p>
-                <button class="primary-btn" (click)="toggleScanner()">Scan Your First Item</button>
-            </div>
-        </ng-template>
     </main>
-
-    <footer class="cart-footer" *ngIf="cartItems.length > 0">
-        <div class="summary">
-            <div class="summary-line">
-                <span>Items ({{ cartItems.length }})</span>
-                <span>₹{{ totalAmount }}</span>
-            </div>
-            <div class="summary-line total">
-                <span>Total Amount</span>
-                <span>₹{{ totalAmount }}</span>
-            </div>
-        </div>
-        <button class="checkout-btn" (click)="checkout()">
-            Proceed to Checkout
-        </button>
-    </footer>
 </div>
